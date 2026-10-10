@@ -60,6 +60,8 @@ def generate_report_bundle(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     org_name: Optional[str] = None,
+    user_logon: Optional[str] = None,
+    logo: Optional[str] = None,
     disposition: Optional[str] = None,
     template_id: str = "default",
     formats: Optional[List[str]] = None,
@@ -69,6 +71,16 @@ def generate_report_bundle(
         formats = ["pdf", "xlsx", "csv"]
         
     tpl = load_template(template_id)
+    if org_name and org_name.strip():
+        tpl["prepared_for"] = org_name.strip()
+    if user_logon and user_logon.strip():
+        if org_name and org_name.strip():
+            tpl["prepared_by"] = f"{user_logon.strip()} ({org_name.strip()})"
+        else:
+            tpl["prepared_by"] = user_logon.strip()
+    if logo and logo.strip():
+        tpl["logo"] = logo.strip()
+
     client = DmarcOpenSearchClient()
     data = client.fetch_report_data(
         domain=domain,
@@ -193,6 +205,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DMARC Report Generation Engine")
     parser.add_argument("--domain", default="all", help="Target domain (default: all)")
     parser.add_argument("--template", default="default", help="Template ID (default, acme_branded)")
+    parser.add_argument("--org-name", default="", help="Client / Organization Name")
+    parser.add_argument("--user-logon", default="", help="User Logon / Username")
+    parser.add_argument("--logo", default="", help="Logo image path or data URI")
     parser.add_argument("--formats", default="pdf,xlsx,csv", help="Comma-separated formats (pdf,xlsx,csv)")
     parser.add_argument("--output-dir", default=OUTPUT_DIR, help="Output destination folder")
     parser.add_argument("--serve", action="store_true", help="Start the FastAPI HTTP server")
@@ -208,6 +223,9 @@ if __name__ == "__main__":
         result = generate_report_bundle(
             domain=args.domain,
             template_id=args.template,
+            org_name=args.org_name,
+            user_logon=args.user_logon,
+            logo=args.logo,
             formats=fmt_list,
             output_dir=args.output_dir
         )

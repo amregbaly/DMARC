@@ -36,6 +36,8 @@ export default function UserManagement({ currentUser }) {
   // Form states
   const [formUsername, setFormUsername] = useState('');
   const [formEmail, setFormEmail] = useState('');
+  const [formOrgName, setFormOrgName] = useState('');
+  const [formLogoUrl, setFormLogoUrl] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState('viewer');
   const [formDomains, setFormDomains] = useState([]);
@@ -72,6 +74,8 @@ export default function UserManagement({ currentUser }) {
     setEditingUser(null);
     setFormUsername('');
     setFormEmail('');
+    setFormOrgName('');
+    setFormLogoUrl('');
     setFormPassword('');
     setFormRole(isManager ? 'viewer' : 'manager');
     // If manager, default domains to manager's first domain or empty
@@ -85,6 +89,8 @@ export default function UserManagement({ currentUser }) {
     setEditingUser(u);
     setFormUsername(u.username);
     setFormEmail(u.email || '');
+    setFormOrgName(u.organization_name || '');
+    setFormLogoUrl(u.logo_url || '');
     setFormPassword(''); // blank means do not change
     setFormRole(u.role);
     setFormDomains(u.domains || []);
@@ -128,6 +134,8 @@ export default function UserManagement({ currentUser }) {
         const payload = {
           email: cleanEmail,
           username: formUsername.trim() || cleanEmail.split('@')[0],
+          organization_name: formOrgName.trim(),
+          logo_url: formLogoUrl.trim(),
           isActive: formIsActive,
           domains: formDomains
         };
@@ -149,6 +157,8 @@ export default function UserManagement({ currentUser }) {
         const payload = {
           email: cleanEmail,
           username: formUsername.trim() || cleanEmail.split('@')[0],
+          organization_name: formOrgName.trim(),
+          logo_url: formLogoUrl.trim(),
           password: formPassword.trim(),
           role: isManager ? 'viewer' : formRole,
           domains: formDomains
@@ -358,8 +368,13 @@ export default function UserManagement({ currentUser }) {
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-500">
-                              @{u.username}
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[11px] text-slate-500">@{u.username}</span>
+                              {u.organization_name && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                                  {u.organization_name}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -515,16 +530,44 @@ export default function UserManagement({ currentUser }) {
                 />
               </div>
 
-              {/* Username / Display Name */}
+              {/* User Logon / Username */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Username / Display Name <span className="text-slate-500 font-normal">(optional, defaults to email name)</span>
+                  User Logon / Username <span className="text-slate-500 font-normal">(author name on reports)</span>
                 </label>
                 <input
                   type="text"
                   value={formUsername}
                   onChange={(e) => setFormUsername(e.target.value)}
                   placeholder="e.g. johndoe"
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-cyan-500 text-slate-100 text-xs rounded-xl px-3.5 py-2 focus:outline-none"
+                />
+              </div>
+
+              {/* Organization / Company Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Organization / Client Name <span className="text-cyan-400 font-normal">(shown on branded reports)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formOrgName}
+                  onChange={(e) => setFormOrgName(e.target.value)}
+                  placeholder="e.g. Acme Corporation, Voxera Defense"
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-cyan-500 text-slate-100 text-xs rounded-xl px-3.5 py-2 focus:outline-none"
+                />
+              </div>
+
+              {/* Organization Logo */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Organization Logo <span className="text-slate-500 font-normal">(image URL, data URI, or path)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formLogoUrl}
+                  onChange={(e) => setFormLogoUrl(e.target.value)}
+                  placeholder="e.g. templates/assets/sentinel_logo.png or https://.../logo.png"
                   className="w-full bg-slate-900 border border-slate-700 focus:border-cyan-500 text-slate-100 text-xs rounded-xl px-3.5 py-2 focus:outline-none"
                 />
               </div>

@@ -13,6 +13,10 @@ class DmarcPdfGenerator:
 
     def _get_logo_data_uri(self) -> str:
         logo_rel = self.template.get("logo", "templates/assets/sentinel_logo.png")
+        if not logo_rel:
+            return ""
+        if logo_rel.startswith("data:image/") or logo_rel.startswith("http://") or logo_rel.startswith("https://"):
+            return logo_rel
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         logo_full = os.path.join(base_dir, logo_rel) if not os.path.isabs(logo_rel) else logo_rel
         

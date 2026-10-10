@@ -104,6 +104,13 @@ export async function changePassword({ currentPassword, newPassword }) {
   });
 }
 
+export async function updateProfile(profileData) {
+  return authFetch(`${BASE_URL}/auth/profile`, {
+    method: 'PUT',
+    body: JSON.stringify(profileData)
+  });
+}
+
 // ==========================================
 // User Management APIs (Admin & Manager)
 // ==========================================

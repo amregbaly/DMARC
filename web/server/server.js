@@ -231,12 +231,44 @@ app.post('/api/auth/login', async (req, res) => {
         email: user.email,
         username: user.username,
         role: user.role,
+        organization_name: user.organization_name || '',
+        logo_url: user.logo_url || '',
         domains: user.domains || []
       }
     });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error during login' });
+  }
+});
+
+// Update current user's profile / identity
+app.put('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const { username, organization_name, logo_url } = req.body;
+    const updated = db.updateUserProfile(req.user.id, {
+      username,
+      organization_name,
+      logo_url
+    });
+    if (!updated) {
+      return res.status(404).json({ error: 'User account not found' });
+    }
+    res.json({
+      status: 'success',
+      user: {
+        id: updated.id,
+        email: updated.email,
+        username: updated.username,
+        role: updated.role,
+        organization_name: updated.organization_name || '',
+        logo_url: updated.logo_url || '',
+        domains: updated.domains || []
+      }
+    });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    res.status(500).json({ error: 'Failed to update user profile' });
   }
 });
 
@@ -291,6 +323,8 @@ app.get('/api/users', authenticateToken, requireRole('admin', 'manager'), async 
       email: u.email,
       username: u.username,
       role: u.role,
+      organization_name: u.organization_name || '',
+      logo_url: u.logo_url || '',
       parent_id: req.user.role === 'admin' ? u.parent_id : undefined,
       parent_username: req.user.role === 'admin' ? u.parent_username : undefined,
       is_active: u.is_active,
@@ -330,7 +364,7 @@ app.get('/api/users/assignable-domains', authenticateToken, requireRole('admin',
 // Create new user (Email-centric)
 app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
   try {
-    const { email, username, password, role, domains } = req.body;
+    const { email, username, password, role, domains, organization_name, logo_url } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -387,6 +421,8 @@ app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async
       username: finalUsername,
       password,
       role: finalRole,
+      organization_name,
+      logo_url,
       parentId,
       domains: finalDomains
     });
@@ -396,6 +432,8 @@ app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async
       email: newUser.email,
       username: newUser.username,
       role: newUser.role,
+      organization_name: newUser.organization_name || '',
+      logo_url: newUser.logo_url || '',
       parent_id: req.user.role === 'admin' ? newUser.parent_id : undefined,
       is_active: newUser.is_active,
       created_at: newUser.created_at,
@@ -415,7 +453,7 @@ app.put('/api/users/:id', authenticateToken, requireRole('admin', 'manager'), as
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const { email, username, password, role, isActive, domains } = req.body;
+    const { email, username, password, role, isActive, domains, organization_name, logo_url } = req.body;
 
     let cleanEmail = undefined;
     if (email !== undefined) {
@@ -457,6 +495,8 @@ app.put('/api/users/:id', authenticateToken, requireRole('admin', 'manager'), as
       username,
       password,
       role: req.user.role === 'admin' ? role : target.role,
+      organization_name,
+      logo_url,
       isActive,
       domains
     });
@@ -466,6 +506,8 @@ app.put('/api/users/:id', authenticateToken, requireRole('admin', 'manager'), as
       email: updated.email,
       username: updated.username,
       role: updated.role,
+      organization_name: updated.organization_name || '',
+      logo_url: updated.logo_url || '',
       parent_id: req.user.role === 'admin' ? updated.parent_id : undefined,
       is_active: updated.is_active,
       updated_at: updated.updated_at,
@@ -2053,13 +2095,17 @@ app.delete('/api/reports/templates/:id', authenticateToken, requireRole('admin',
 // 5. Generate On-Demand Report
 app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async (req, res) => {
   try {
-    const { domain = 'all', template_id = 'default', formats = ['pdf', 'xlsx', 'csv'] } = req.body;
+    const { domain = 'all', template_id = 'default', formats = ['pdf', 'xlsx', 'csv'], organization_name, user_logon, logo_url } = req.body;
     
     // Validate domain
     let targetDomain = domain;
     if (domain !== 'all' && req.user.role !== 'admin' && Array.isArray(req.user.domains) && !req.user.domains.includes(domain)) {
       return res.status(403).json({ error: `Access denied to domain ${domain}` });
     }
+
+    const targetOrg = (organization_name !== undefined ? organization_name : (req.user.organization_name || '')).trim();
+    const targetUser = (user_logon !== undefined ? user_logon : (req.user.username || '')).trim();
+    const targetLogo = (logo_url !== undefined ? logo_url : (req.user.logo_url || '')).trim();
 
     const scriptPath = path.resolve(__dirname, '../../reporting/report_service.py');
     const safeFormats = Array.isArray(formats) ? formats.filter(f => ['pdf', 'xlsx', 'csv'].includes(f)) : ['pdf'];
@@ -2072,6 +2118,16 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
       '--formats', safeFormats.join(','),
       '--output-dir', REPORTS_OUTPUT_DIR
     ];
+
+    if (targetOrg) {
+      args.push('--org-name', targetOrg);
+    }
+    if (targetUser) {
+      args.push('--user-logon', targetUser);
+    }
+    if (targetLogo) {
+      args.push('--logo', targetLogo);
+    }
 
     execFile('python3', args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {
       if (error) {

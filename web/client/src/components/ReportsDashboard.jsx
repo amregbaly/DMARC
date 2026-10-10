@@ -19,7 +19,10 @@ import {
   Globe,
   Sliders,
   ChevronRight,
-  Database
+  Building2,
+  User,
+  Image,
+  Save
 } from 'lucide-react';
 import {
   fetchReportTemplates,
@@ -31,13 +34,12 @@ import {
   createReportSchedule,
   deleteReportSchedule,
   getDownloadReportUrl,
-  getDashboardsExportUrl,
   downloadReportFile,
-  downloadDashboardsExport
+  updateProfile
 } from '../services/api';
 
 export default function ReportsDashboard({ domains = [], selectedDomain, onSelectDomain, currentUser }) {
-  const [activeSubTab, setActiveSubTab] = useState('generate'); // 'generate' | 'templates' | 'history' | 'schedules' | 'dashboards'
+  const [activeSubTab, setActiveSubTab] = useState('generate'); // 'generate' | 'templates' | 'history' | 'schedules'
   
   // State: Templates
   const [templates, setTemplates] = useState([]);
@@ -73,11 +75,26 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // State: User / Organization Identity for Reports (editable by user & admin)
+  const [identityLogon, setIdentityLogon] = useState(currentUser?.username || '');
+  const [identityOrg, setIdentityOrg] = useState(currentUser?.organization_name || '');
+  const [identityLogo, setIdentityLogo] = useState(currentUser?.logo_url || '');
+  const [savingIdentity, setSavingIdentity] = useState(false);
+  const [identityStatus, setIdentityStatus] = useState(null);
+
   useEffect(() => {
     loadTemplates();
     loadHistory();
     loadSchedules();
   }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.username) setIdentityLogon(currentUser.username);
+      if (currentUser.organization_name !== undefined) setIdentityOrg(currentUser.organization_name || '');
+      if (currentUser.logo_url !== undefined) setIdentityLogo(currentUser.logo_url || '');
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (selectedDomain) {
@@ -160,7 +177,10 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
         org_name: orgFilter,
         disposition: dispositionFilter,
         template_id: selectedTemplateId,
-        formats: activeFormats
+        formats: activeFormats,
+        organization_name: identityOrg || currentUser?.organization_name || '',
+        user_logon: identityLogon || currentUser?.username || '',
+        logo_url: identityLogo || currentUser?.logo_url || ''
       });
 
       setGeneratedResult(res);
@@ -170,6 +190,25 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
       setGenerationError(err.message || 'Report generation failed. Please verify OpenSearch connection.');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handleSaveIdentity(e) {
+    if (e) e.preventDefault();
+    setSavingIdentity(true);
+    setIdentityStatus(null);
+    try {
+      await updateProfile({
+        username: identityLogon,
+        organization_name: identityOrg,
+        logo_url: identityLogo
+      });
+      setIdentityStatus({ type: 'success', message: 'Identity & branding updated successfully!' });
+      setTimeout(() => setIdentityStatus(null), 4000);
+    } catch (err) {
+      setIdentityStatus({ type: 'error', message: err.message || 'Failed to update organization profile' });
+    } finally {
+      setSavingIdentity(false);
     }
   }
 
@@ -241,28 +280,11 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
             </div>
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
               <FileText className="w-6 h-6 text-cyan-400" />
-              Branded DMARC Executive Reports & Dashboards
+              Branded DMARC Executive Reports
             </h1>
             <p className="text-xs text-slate-400 max-w-2xl mt-1">
-              Generate pixel-perfect client reports in PDF, multi-sheet Excel (.xlsx), and CSV formats with customizable corporate branding, logo placement, readiness verdict, and full OpenSearch Dashboards integration.
+              Generate pixel-perfect client reports in PDF, multi-sheet Excel (.xlsx), and CSV formats with customizable corporate branding, logo placement, client readiness verdict, and white-labeling.
             </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <a
-              href={getDashboardsExportUrl()}
-              onClick={(e) => {
-                e.preventDefault();
-                downloadDashboardsExport().catch(() => {
-                  window.location.href = getDashboardsExportUrl();
-                });
-              }}
-              download="opensearch-dmarc-dashboards.ndjson"
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-2 transition"
-            >
-              <Database className="w-3.5 h-3.5 text-cyan-400" />
-              Download OpenSearch NDJSON
-            </a>
           </div>
         </div>
 
@@ -272,8 +294,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
             { id: 'generate', label: 'Generate Report', icon: FileText },
             { id: 'templates', label: 'Branding & Templates', icon: Palette },
             { id: 'history', label: 'Report History', icon: Clock },
-            { id: 'schedules', label: 'Automated Schedules', icon: Calendar },
-            { id: 'dashboards', label: 'OpenSearch Dashboards & Queries', icon: Database }
+            { id: 'schedules', label: 'Automated Schedules', icon: Calendar }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSubTab === tab.id;
@@ -611,11 +632,17 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px] uppercase font-bold">Client / Recipient</span>
-                    <span className="text-cyan-400 font-medium">{selectedTemplate.prepared_for}</span>
+                    <span className="text-cyan-400 font-medium">
+                      {identityOrg || selectedTemplate.prepared_for}
+                      {identityOrg ? <span className="text-[10px] text-cyan-300/70 ml-1.5">(Custom Org)</span> : null}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Authoring Entity</span>
-                    <span className="text-slate-200 font-medium">{selectedTemplate.prepared_by}</span>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Authoring Entity / Logon</span>
+                    <span className="text-slate-200 font-medium">
+                      {identityLogon || selectedTemplate.prepared_by}
+                      {identityLogon ? <span className="text-[10px] text-slate-400 ml-1.5">(User Logon)</span> : null}
+                    </span>
                   </div>
                 </div>
 
@@ -658,6 +685,115 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
       {/* ======================================================== */}
       {activeSubTab === 'templates' && (
         <div className="space-y-6">
+          {/* Organization & User Identity Card */}
+          <div className="glass-panel p-6 rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-slate-900/95 via-slate-900/80 to-cyan-950/20 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Organization & User Identity
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 uppercase">
+                      Report Author & Client
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Configure your user logon, organization name, and corporate logo. These credentials are automatically injected into executive PDF cover pages, Excel audit metadata, and client CSV headers.
+                  </p>
+                </div>
+              </div>
+
+              {identityStatus && (
+                <div className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 shrink-0 ${
+                  identityStatus.type === 'success'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}>
+                  {identityStatus.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                  <span>{identityStatus.message}</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveIdentity} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-cyan-400" />
+                    User Logon / Author Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={identityLogon}
+                    onChange={(e) => setIdentityLogon(e.target.value)}
+                    placeholder="e.g. admin or john.doe"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none transition"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">Appears as <strong>Prepared By / Author</strong> on PDF, Excel & CSV reports.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-cyan-400" />
+                    Organization / Client Name
+                  </label>
+                  <input
+                    type="text"
+                    value={identityOrg}
+                    onChange={(e) => setIdentityOrg(e.target.value)}
+                    placeholder="e.g. Acme Corporation or SOC Unit"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none transition"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">Appears as <strong>Prepared For / Client</strong> on title blocks.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center gap-1.5">
+                    <Image className="w-3.5 h-3.5 text-cyan-400" />
+                    Organization Logo (URL or Path)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={identityLogo}
+                      onChange={(e) => setIdentityLogo(e.target.value)}
+                      placeholder="templates/assets/sentinel_logo.png or https://..."
+                      className="flex-1 bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none transition"
+                    />
+                    {identityLogo && (
+                      <div className="w-10 h-9 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                        <img
+                          src={identityLogo}
+                          alt="Logo Preview"
+                          className="max-h-full max-w-full object-contain"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Logo rendered on executive PDF title page & sheet headers.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-[11px] text-slate-400">
+                  Current report identity: <strong className="text-white">{identityLogon || 'Default Author'}</strong> for <strong className="text-cyan-400">{identityOrg || 'Default Client'}</strong>
+                </span>
+                <button
+                  type="submit"
+                  disabled={savingIdentity}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{savingIdentity ? 'Saving Identity...' : 'Save Identity & Branding'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-white">Configured Branding Templates</h2>
@@ -1025,68 +1161,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* 5. OPENSEARCH DASHBOARDS & DSL QUERIES TAB */}
-      {/* ======================================================== */}
-      {activeSubTab === 'dashboards' && (
-        <div className="space-y-6">
-          <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Database className="w-5 h-5 text-cyan-400" />
-                  OpenSearch Dashboards Saved Objects Import (.ndjson)
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Export file containing 5 complete Dashboards, Index Pattern (<code className="text-cyan-300">dmarc_aggregate-*</code>), and 8 custom visualizations ready to import into OpenSearch Dashboards.
-                </p>
-              </div>
 
-              <a
-                href={getDashboardsExportUrl()}
-                onClick={(e) => {
-                  e.preventDefault();
-                  downloadDashboardsExport().catch(() => {
-                    window.location.href = getDashboardsExportUrl();
-                  });
-                }}
-                download="opensearch-dmarc-dashboards.ndjson"
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 hover:opacity-90 transition shrink-0"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Saved Objects (.ndjson)</span>
-              </a>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 pt-2">
-              {[
-                { title: '1. Executive Overview', desc: 'Pass rate timeline, top domains, disposition pie chart' },
-                { title: '2. Authentication & Alignment', desc: 'SPF x DKIM matrix, DKIM selectors, override types' },
-                { title: '3. Traffic & Sender Inventory', desc: 'Top sender base domains, IPs, reverse DNS, GeoIP' },
-                { title: '4. Security & Threat Hunting', desc: 'Fail/fail spoofing IPs, unauthorized volume spikes' },
-                { title: '5. Operational Health', desc: 'Legitimate sender hygiene, policy readiness (p=reject)' }
-              ].map((d, i) => (
-                <div key={i} className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">
-                  <div className="font-bold text-cyan-400 mb-1">{d.title}</div>
-                  <div className="text-[11px] text-slate-400">{d.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Import Instructions */}
-          <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-3">
-            <h4 className="text-sm font-bold text-white">How to Import Into OpenSearch Dashboards:</h4>
-            <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1.5">
-              <li>Click the <strong>Download Saved Objects (.ndjson)</strong> button above.</li>
-              <li>Open your OpenSearch Dashboards instance (e.g. at port 5601).</li>
-              <li>Navigate to <strong>Stack Management</strong> &gt; <strong>Saved Objects</strong>.</li>
-              <li>Click <strong>Import</strong> in the top right corner and upload <code className="text-cyan-300">opensearch-dmarc-dashboards.ndjson</code>.</li>
-              <li>Select <em>"Automatically overwrite conflicts"</em> and confirm the import. All 5 dashboards will immediately appear under the Dashboards menu!</li>
-            </ol>
-          </div>
-        </div>
-      )}
 
       {/* ======================================================== */}
       {/* TEMPLATE EDITOR MODAL */}

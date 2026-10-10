@@ -116,6 +116,8 @@ export function authenticateToken(req, res, next) {
     username: user.username,
     email: user.email,
     role: user.role,
+    organization_name: user.organization_name || '',
+    logo_url: user.logo_url || '',
     domains: user.domains || []
   };
 
