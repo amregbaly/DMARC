@@ -1,6 +1,7 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Check, X, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const ALIGNED_COLORS = {
   aligned: '#10b981', // emerald-500
@@ -14,20 +15,26 @@ const DISPOSITION_COLORS = {
 };
 
 export default function AlignmentCharts({ alignment }) {
+  const { t, language } = useLanguage();
   if (!alignment) return null;
 
+  const isEs = language === 'es';
   const { spfAligned = [], dkimAligned = [], disposition = [], matrix = {} } = alignment;
 
   // Transform SPF data for donut
   const spfData = spfAligned.map((item) => ({
-    name: item.aligned ? 'SPF Aligned' : 'SPF Unaligned',
+    name: item.aligned
+      ? (isEs ? 'SPF Alineado' : 'SPF Aligned')
+      : (isEs ? 'SPF No Alineado' : 'SPF Unaligned'),
     value: item.count,
     color: item.aligned ? ALIGNED_COLORS.aligned : ALIGNED_COLORS.unaligned
   }));
 
   // Transform DKIM data for donut
   const dkimData = dkimAligned.map((item) => ({
-    name: item.aligned ? 'DKIM Aligned' : 'DKIM Unaligned',
+    name: item.aligned
+      ? (isEs ? 'DKIM Alineado' : 'DKIM Aligned')
+      : (isEs ? 'DKIM No Alineado' : 'DKIM Unaligned'),
     value: item.count,
     color: item.aligned ? ALIGNED_COLORS.aligned : ALIGNED_COLORS.unaligned
   }));
@@ -50,7 +57,7 @@ export default function AlignmentCharts({ alignment }) {
         <div className="bg-slate-900 border border-slate-700/80 p-2.5 rounded-xl shadow-xl text-xs">
           <p className="font-semibold text-slate-200">{data.name}</p>
           <p className="text-cyan-400 font-mono mt-0.5">
-            {data.value.toLocaleString()} messages
+            {data.value.toLocaleString()} {isEs ? 'mensajes' : 'messages'}
           </p>
         </div>
       );
@@ -64,10 +71,10 @@ export default function AlignmentCharts({ alignment }) {
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-cyan-400" />
-            Authentication & Alignment Breakdown
+            {t('alignment.title', 'Authentication & Alignment Breakdown')}
           </h2>
           <p className="text-xs text-slate-400">
-            DMARC requires either SPF or DKIM to be aligned with the Header From domain.
+            {t('alignment.subtitle', 'DMARC requires either SPF or DKIM to be aligned with the Header From domain.')}
           </p>
         </div>
       </div>
@@ -76,7 +83,9 @@ export default function AlignmentCharts({ alignment }) {
         {/* SPF Alignment Card */}
         <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-200">SPF Alignment</h3>
+            <h3 className="text-sm font-semibold text-slate-200">
+              {isEs ? 'Alineación SPF' : 'SPF Alignment'}
+            </h3>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
               Return-Path / Header
             </span>
@@ -121,7 +130,9 @@ export default function AlignmentCharts({ alignment }) {
         {/* DKIM Alignment Card */}
         <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-200">DKIM Alignment</h3>
+            <h3 className="text-sm font-semibold text-slate-200">
+              {isEs ? 'Alineación DKIM' : 'DKIM Alignment'}
+            </h3>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
               d= Tag / Header
             </span>
@@ -166,9 +177,11 @@ export default function AlignmentCharts({ alignment }) {
         {/* Receiver Disposition */}
         <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-200">Enforcement Action</h3>
+            <h3 className="text-sm font-semibold text-slate-200">
+              {isEs ? 'Acción de Aplicación' : 'Enforcement Action'}
+            </h3>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
-              Receiver Verdict
+              {isEs ? 'Veredicto Receptor' : 'Receiver Verdict'}
             </span>
           </div>
 
@@ -212,56 +225,66 @@ export default function AlignmentCharts({ alignment }) {
       {/* 4-Way Alignment Matrix */}
       <div className="glass-panel rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-slate-200 mb-4 flex items-center justify-between">
-          <span>Authentication Alignment Matrix</span>
-          <span className="text-xs text-slate-400 font-normal">How messages passed or failed DMARC</span>
+          <span>{t('alignment.spfDkimComparison', 'Authentication Alignment Matrix')}</span>
+          <span className="text-xs text-slate-400 font-normal">
+            {isEs ? 'Evaluación combinada de SPF y DKIM' : 'How messages passed or failed DMARC'}
+          </span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Both Pass */}
           <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-emerald-400">Both Aligned</span>
+              <span className="text-xs font-semibold text-emerald-400">
+                {t('alignment.bothAligned', 'Both Aligned')}
+              </span>
               <Check className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-xl font-bold text-white font-mono">{matrix.both?.toLocaleString() || 0}</div>
             <div className="text-[11px] text-slate-400 mt-1">
-              {getPercent(matrix.both)}% — Gold standard (SPF & DKIM pass)
+              {getPercent(matrix.both)}% — {isEs ? 'Estándar de oro (SPF y DKIM válidos)' : 'Gold standard (SPF & DKIM pass)'}
             </div>
           </div>
 
           {/* DKIM Only */}
           <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-cyan-400">DKIM Only Aligned</span>
+              <span className="text-xs font-semibold text-cyan-400">
+                {t('alignment.dkimOnly', 'DKIM Only Aligned')}
+              </span>
               <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded font-mono">DMARC Pass</span>
             </div>
             <div className="text-xl font-bold text-white font-mono">{matrix.dkimOnly?.toLocaleString() || 0}</div>
             <div className="text-[11px] text-slate-400 mt-1">
-              {getPercent(matrix.dkimOnly)}% — Saved by DKIM cryptographic signature
+              {getPercent(matrix.dkimOnly)}% — {isEs ? 'Protegido por firma criptográfica DKIM' : 'Saved by DKIM cryptographic signature'}
             </div>
           </div>
 
           {/* SPF Only */}
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-blue-400">SPF Only Aligned</span>
+              <span className="text-xs font-semibold text-blue-400">
+                {t('alignment.spfOnly', 'SPF Only Aligned')}
+              </span>
               <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono">DMARC Pass</span>
             </div>
             <div className="text-xl font-bold text-white font-mono">{matrix.spfOnly?.toLocaleString() || 0}</div>
             <div className="text-[11px] text-slate-400 mt-1">
-              {getPercent(matrix.spfOnly)}% — Saved by authorized sending IP
+              {getPercent(matrix.spfOnly)}% — {isEs ? 'Protegido por IP autorizada en SPF' : 'Saved by authorized sending IP'}
             </div>
           </div>
 
           {/* Neither Aligned */}
           <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-rose-400">Neither Aligned</span>
+              <span className="text-xs font-semibold text-rose-400">
+                {t('alignment.neither', 'Neither Aligned')}
+              </span>
               <X className="w-4 h-4 text-rose-400" />
             </div>
             <div className="text-xl font-bold text-white font-mono">{matrix.neither?.toLocaleString() || 0}</div>
             <div className="text-[11px] text-slate-400 mt-1">
-              {getPercent(matrix.neither)}% — DMARC Failure (Spoof or Misconfig)
+              {getPercent(matrix.neither)}% — {isEs ? 'Fallo DMARC (Suplantación o Error)' : 'DMARC Failure (Spoof or Misconfig)'}
             </div>
           </div>
         </div>

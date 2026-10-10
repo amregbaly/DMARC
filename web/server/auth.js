@@ -118,6 +118,7 @@ export function authenticateToken(req, res, next) {
     role: user.role,
     organization_name: user.organization_name || '',
     logo_url: user.logo_url || '',
+    language: user.language || 'en',
     domains: user.domains || []
   };
 

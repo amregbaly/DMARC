@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, FileJson, Check, X, ShieldAlert } from 'lucide-react';
 import { fetchRecords } from '../services/api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function RawLogExplorer({ selectedDomain }) {
+  const { t, language } = useLanguage();
   const [records, setRecords] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -48,10 +50,10 @@ export default function RawLogExplorer({ selectedDomain }) {
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
             <FileJson className="w-5 h-5 text-cyan-400" />
-            Raw Log & Record Explorer
+            {t('rawLogs.title', 'Raw Log & Record Explorer')}
           </h2>
           <p className="text-xs text-slate-400">
-            Search, filter, and inspect raw parsed DMARC XML aggregate documents stored in OpenSearch.
+            {t('rawLogs.subtitle', 'Search, filter, and inspect raw parsed DMARC XML aggregate documents stored in OpenSearch.')}
           </p>
         </div>
 
@@ -60,7 +62,7 @@ export default function RawLogExplorer({ selectedDomain }) {
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search IP, domain, org..."
+            placeholder={t('rawLogs.searchPlaceholder', 'Filter logs by IP, domain, selector, or disposition...')}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 text-xs text-slate-100 rounded-xl pl-9 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -74,15 +76,15 @@ export default function RawLogExplorer({ selectedDomain }) {
           <table className="w-full text-left text-xs font-mono">
             <thead className="bg-slate-900/60 border-b border-slate-800 text-slate-400 font-sans font-medium">
               <tr>
-                <th className="px-5 py-3">Date</th>
-                <th className="px-5 py-3">Header From</th>
-                <th className="px-5 py-3">Sender IP</th>
-                <th className="px-5 py-3">Reporter</th>
-                <th className="px-5 py-3 text-right">Messages</th>
-                <th className="px-5 py-3 text-center">SPF</th>
-                <th className="px-5 py-3 text-center">DKIM</th>
-                <th className="px-5 py-3 text-center">DMARC</th>
-                <th className="px-5 py-3">Action</th>
+                <th className="px-5 py-3">{t('rawLogs.timestamp', 'Date')}</th>
+                <th className="px-5 py-3">{t('rawLogs.headerFrom', 'Header From')}</th>
+                <th className="px-5 py-3">{t('rawLogs.sourceIp', 'Sender IP')}</th>
+                <th className="px-5 py-3">{t('rawLogs.reporter', 'Reporter')}</th>
+                <th className="px-5 py-3 text-right">{t('rawLogs.messages', 'Messages')}</th>
+                <th className="px-5 py-3 text-center">{t('rawLogs.spfResult', 'SPF')}</th>
+                <th className="px-5 py-3 text-center">{t('rawLogs.dkimResult', 'DKIM')}</th>
+                <th className="px-5 py-3 text-center">{t('rawLogs.dmarcResult', 'DMARC')}</th>
+                <th className="px-5 py-3">{t('common.actions', 'Action')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">

@@ -1,17 +1,27 @@
 import React from 'react';
 import { Shield, CheckCircle2, AlertCircle, ArrowRight, Info, ShieldCheck } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function PolicyReadiness({ policies = [] }) {
+  const { t, language } = useLanguage();
+  const isEs = language === 'es';
+
+  function formatReadiness(val) {
+    if (val === 'Ready') return isEs ? 'Listo' : 'Ready';
+    if (val === 'In Review') return isEs ? 'En Revisión' : 'In Review';
+    return isEs ? 'No Preparado' : val;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-cyan-400" />
-            DMARC Policy & Enforcement Readiness
+            {t('policies.title', 'DMARC Policy & Enforcement Readiness')}
           </h2>
           <p className="text-xs text-slate-400">
-            Audit your published DNS records and simulate the security impact before transitioning to full rejection (`p=reject`).
+            {t('policies.subtitle', 'Audit your published DNS records and simulate the security impact before transitioning to full rejection (`p=reject`).')}
           </p>
         </div>
       </div>
@@ -19,22 +29,26 @@ export default function PolicyReadiness({ policies = [] }) {
       {/* Policies Table */}
       <div className="glass-panel rounded-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-200">Domain DMARC Policies & Alignment Modes</h3>
-          <span className="text-xs text-slate-400 font-mono">DNS Records Evaluated</span>
+          <h3 className="text-sm font-semibold text-slate-200">
+            {isEs ? 'Políticas DMARC y Modos de Alineación' : 'Domain DMARC Policies & Alignment Modes'}
+          </h3>
+          <span className="text-xs text-slate-400 font-mono">
+            {isEs ? 'Registros DNS Evaluados' : 'DNS Records Evaluated'}
+          </span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">
             <thead className="bg-slate-900/60 border-b border-slate-800 text-slate-400 font-sans font-medium">
               <tr>
-                <th className="px-6 py-3">Domain</th>
-                <th className="px-6 py-3">Policy (p=)</th>
-                <th className="px-6 py-3">Subdomain (sp=)</th>
-                <th className="px-6 py-3">Enforcement (pct=)</th>
-                <th className="px-6 py-3">Alignment (adkim/aspf)</th>
-                <th className="px-6 py-3 text-right">Total Msgs</th>
-                <th className="px-6 py-3">Pass Rate</th>
-                <th className="px-6 py-3 font-sans">Readiness</th>
+                <th className="px-6 py-3">{isEs ? 'Dominio' : 'Domain'}</th>
+                <th className="px-6 py-3">{isEs ? 'Política (p=)' : 'Policy (p=)'}</th>
+                <th className="px-6 py-3">{isEs ? 'Subdominio (sp=)' : 'Subdomain (sp=)'}</th>
+                <th className="px-6 py-3">{isEs ? 'Aplicación (pct=)' : 'Enforcement (pct=)'}</th>
+                <th className="px-6 py-3">{isEs ? 'Alineación (adkim/aspf)' : 'Alignment (adkim/aspf)'}</th>
+                <th className="px-6 py-3 text-right">{isEs ? 'Total Mensajes' : 'Total Msgs'}</th>
+                <th className="px-6 py-3">{isEs ? 'Tasa de Aprobación' : 'Pass Rate'}</th>
+                <th className="px-6 py-3 font-sans">{isEs ? 'Preparación' : 'Readiness'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
@@ -97,7 +111,7 @@ export default function PolicyReadiness({ policies = [] }) {
                         }`}
                       >
                         {isReady ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                        {pol.enforcementReadiness}
+                        {formatReadiness(pol.enforcementReadiness)}
                       </span>
                     </td>
                   </tr>
@@ -115,10 +129,14 @@ export default function PolicyReadiness({ policies = [] }) {
             <span className="w-6 h-6 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-xs">
               1
             </span>
-            <h4 className="font-semibold text-slate-200 text-sm">p=none (Monitoring)</h4>
+            <h4 className="font-semibold text-slate-200 text-sm">
+              p=none ({isEs ? 'Monitoreo' : 'Monitoring'})
+            </h4>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Monitor incoming DMARC aggregate reports without affecting deliverability. Discover all legitimate sending services (e.g. Salesforce, SendGrid, Google Workspace).
+            {isEs
+              ? 'Supervise informes agregados DMARC sin afectar la entrega. Identifique todos los proveedores de correo legítimos.'
+              : 'Monitor incoming DMARC aggregate reports without affecting deliverability. Discover all legitimate sending services (e.g. Salesforce, SendGrid, Google Workspace).'}
           </p>
         </div>
 
@@ -127,10 +145,14 @@ export default function PolicyReadiness({ policies = [] }) {
             <span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-xs">
               2
             </span>
-            <h4 className="font-semibold text-amber-300 text-sm">p=quarantine (Spam Folder)</h4>
+            <h4 className="font-semibold text-amber-300 text-sm">
+              p=quarantine ({isEs ? 'Carpeta de Spam' : 'Spam Folder'})
+            </h4>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Unauthenticated messages are delivered to the recipient's spam folder. Begin with `pct=25` and gradually ramp up to `pct=100` once legitimate senders are aligned.
+            {isEs
+              ? 'Los correos no autenticados se entregan en la carpeta de correo no deseado. Comience con pct=25 y aumente progresivamente hasta pct=100.'
+              : 'Unauthenticated messages are delivered to the recipient\'s spam folder. Begin with `pct=25` and gradually ramp up to `pct=100` once legitimate senders are aligned.'}
           </p>
         </div>
 
@@ -139,10 +161,14 @@ export default function PolicyReadiness({ policies = [] }) {
             <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold text-xs">
               3
             </span>
-            <h4 className="font-semibold text-emerald-300 text-sm">p=reject (Full Protection)</h4>
+            <h4 className="font-semibold text-emerald-300 text-sm">
+              p=reject ({isEs ? 'Protección Total' : 'Full Protection'})
+            </h4>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Receiving servers completely reject unauthorized emails at the SMTP boundary. Total defense against brand impersonation and spoofing phishing attacks.
+            {isEs
+              ? 'Los servidores de correo rechazan de plano cualquier correo no autorizado en el límite SMTP. Defensa total contra suplantación y phishing.'
+              : 'Receiving servers completely reject unauthorized emails at the SMTP boundary. Total defense against brand impersonation and spoofing phishing attacks.'}
           </p>
         </div>
       </div>

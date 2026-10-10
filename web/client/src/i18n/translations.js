@@ -1,0 +1,615 @@
+export const translations = {
+  en: {
+    // Navigation & Header
+    nav: {
+      brand: 'DMARC',
+      brandSuffix: 'Sentinel',
+      live: 'LIVE',
+      tagline: 'Enterprise Email Authentication & Access Control',
+      overview: 'Overview',
+      health: 'Domain Health',
+      alignment: 'Auth & Alignment',
+      threats: 'Threat Intel & SOC',
+      policies: 'Policies & Readiness',
+      reports: 'Reports',
+      records: 'Log Explorer',
+      users: 'User Access',
+      allDomains: 'All Monitored Domains',
+      refresh: 'Refresh data from OpenSearch',
+      profile: 'Profile & Preferences',
+      manageUsers: 'Manage Users & Access',
+      changePassword: 'Change Password',
+      signOut: 'Sign Out',
+      roleAdmin: 'Super Admin',
+      roleManager: 'Manager',
+      roleViewer: 'Viewer',
+      language: 'Language',
+      switchLanguage: 'Switch to Spanish (Español)',
+      languageName: 'English'
+    },
+
+    // User Profile Modal
+    profileModal: {
+      title: 'User Profile & Preferences',
+      subtitle: 'Manage your personal account logon, organization identity, and system language',
+      logonLabel: 'User Logon / Username',
+      logonHelp: 'Your identity as author in executive reports and system audit logs.',
+      emailLabel: 'Registered Email',
+      orgLabel: 'Organization / Client Name',
+      orgHelp: 'Corporate or client entity displayed on branded report covers.',
+      logoLabel: 'Corporate Logo URL or Path',
+      logoHelp: 'E.g. templates/assets/sentinel_logo.png or http://...',
+      languageLabel: 'System Language',
+      languageHelp: 'Select your preferred language for the console interface and generated reports.',
+      saveBtn: 'Save Profile & Preferences',
+      savingBtn: 'Saving Preferences...',
+      successMsg: 'Profile and preferences successfully saved!',
+      errorMsg: 'Failed to update user profile.'
+    },
+
+    // Common UI terms
+    common: {
+      loading: 'Loading data...',
+      save: 'Save',
+      saving: 'Saving...',
+      cancel: 'Cancel',
+      close: 'Close',
+      delete: 'Delete',
+      edit: 'Edit',
+      create: 'Create',
+      search: 'Search...',
+      filter: 'Filter',
+      export: 'Export',
+      status: 'Status',
+      actions: 'Actions',
+      all: 'All',
+      domain: 'Domain',
+      volume: 'Volume',
+      date: 'Date',
+      pass: 'PASS',
+      fail: 'FAIL',
+      none: 'None',
+      quarantine: 'Quarantine',
+      reject: 'Reject',
+      legitimate: 'Legitimate',
+      suspicious: 'Suspicious',
+      misconfigured: 'Misconfigured',
+      active: 'Active',
+      inactive: 'Inactive',
+      na: 'N/A'
+    },
+
+    // KPIs & Executive Overview
+    kpi: {
+      title: 'Executive Metric Snapshot',
+      totalMessages: 'Total Messages',
+      totalMessagesDesc: 'Aggregate email volume processed',
+      passRate: 'DMARC Pass Rate',
+      passRateDesc: 'RFC 7489 authentication pass rate',
+      compliantVolume: 'Compliant Volume',
+      compliantVolumeDesc: 'Legitimate aligned corporate mail',
+      unalignedThreats: 'Unaligned / Threats',
+      unalignedThreatsDesc: 'Spoofing attempts or misconfigured mail',
+      deliveryRate: 'Delivered (p=none)',
+      deliveryRateDesc: 'Inbox delivery permitted',
+      quarantined: 'Quarantined (spam)',
+      quarantinedDesc: 'Diverted to recipient junk folder',
+      blocked: 'Gateway Blocked',
+      blockedDesc: 'Rejected at mail transfer agent'
+    },
+
+    // Auth & Alignment
+    alignment: {
+      title: 'Authentication & Alignment Matrix',
+      subtitle: 'Correlating SPF and DKIM authentication against RFC 7489 alignment requirements',
+      bothAligned: 'Both Aligned (Pass/Pass)',
+      spfOnly: 'SPF Pass & DKIM Fail',
+      dkimOnly: 'SPF Fail & DKIM Pass',
+      neither: 'SPF Fail & DKIM Fail (Spoofing)',
+      spfAlignmentRate: 'SPF Alignment Rate',
+      dkimAlignmentRate: 'DKIM Alignment Rate',
+      dispositionBreakdown: 'Receiver Policy Enforcement Breakdown',
+      compliantVerdict: 'Fully Compliant Corporate Traffic',
+      spfDkimComparison: 'Alignment Matrix Comparison'
+    },
+
+    // Volume & Trends
+    trends: {
+      title: 'Email Volume & Pass Rate Over Time',
+      subtitle: 'Daily aggregated email message throughput and authentication compliance percentage',
+      totalVolume: 'Total Messages',
+      passedVolume: 'Compliant (Pass)',
+      failedVolume: 'Failed (Spoofing/Threat)',
+      passRatePercent: 'Pass Rate (%)',
+      noData: 'No timeseries data available for selected filter.'
+    },
+
+    // Traffic & Senders
+    senders: {
+      title: 'Sending Infrastructure & Service Inventory',
+      subtitle: 'Identification of third-party ESPs, forwarders, and direct sending systems',
+      senderDomain: 'Base Domain / ESP',
+      serviceName: 'Service Provider',
+      volume: 'Message Volume',
+      passRate: 'Pass Rate',
+      classification: 'Classification',
+      legitHelp: 'Legitimate authorized cloud or corporate infrastructure',
+      misconfigHelp: 'Known provider failing SPF or DKIM alignment',
+      suspiciousHelp: 'Unauthorized infrastructure attempting domain impersonation'
+    },
+
+    // Threat Intelligence
+    threats: {
+      title: 'Threat Intelligence & Active Spoofing Hunter',
+      subtitle: 'Tracking unauthorized IPs and malicious infrastructure sending on your domain',
+      highRiskIPs: 'High-Risk Unaligned IP Sources',
+      sourceIp: 'Source IP Address',
+      reverseDns: 'Reverse DNS (PTR)',
+      country: 'Country / Geo',
+      asnNetwork: 'Autonomous System (ASN)',
+      spoofedVolume: 'Spoofed Messages',
+      verdict: 'Threat Verdict',
+      threatConfirmed: 'Confirmed Impersonation',
+      noThreats: 'No critical spoofing sources detected in current scope.'
+    },
+
+    // Policies & Readiness
+    policies: {
+      title: 'Domain Readiness & Enforcement Roadmap',
+      subtitle: 'Progressive roadmap to advance domains from p=none to p=quarantine and p=reject',
+      domainName: 'Monitored Domain',
+      currentPolicy: 'Current Policy',
+      recommendedPolicy: 'Enforcement Recommendation',
+      complianceScore: 'Compliance Rate',
+      statusVerdict: 'Readiness Verdict',
+      readyReject: 'Ready for p=reject (Strict Block)',
+      readyQuarantine: 'Ready for p=quarantine',
+      needsAlignment: 'Alignment Required Before Enforcement',
+      protected: 'Fully Protected at p=reject'
+    },
+
+    // Raw Logs
+    rawLogs: {
+      title: 'OpenSearch DMARC Aggregate Log Explorer',
+      subtitle: 'Direct query inspection of individual aggregate report records in OpenSearch',
+      searchPlaceholder: 'Filter logs by IP, domain, selector, or disposition...',
+      exportJson: 'Export JSON',
+      sourceIp: 'Source IP',
+      headerFrom: 'Header From',
+      reporter: 'Reporter Org',
+      spfResult: 'SPF Result',
+      dkimResult: 'DKIM Result',
+      dmarcResult: 'DMARC',
+      messages: 'Count',
+      disposition: 'Disposition',
+      timestamp: 'Timestamp'
+    },
+
+    // Domain Health Diagnostics
+    health: {
+      title: 'Diagnostic DNS & Email Security Health',
+      subtitle: 'Live DNS record verification for MX, SPF, DKIM, DMARC, and BIMI',
+      enterDomain: 'Enter domain name (e.g. example.com)...',
+      runAudit: 'Run Security Audit',
+      auditing: 'Auditing DNS...',
+      mxTitle: 'Mail Exchange (MX) Records',
+      spfTitle: 'Sender Policy Framework (SPF)',
+      dkimTitle: 'DomainKeys Identified Mail (DKIM)',
+      dmarcTitle: 'DMARC Record Syntax & Policy',
+      bimiTitle: 'Brand Indicators for Message Identification (BIMI)',
+      overallScore: 'Security Health Score',
+      recordFound: 'Record Valid & Active',
+      recordMissing: 'Record Missing or Invalid'
+    },
+
+    // Reports Dashboard
+    reports: {
+      title: 'Branded DMARC Executive Reports',
+      subtitle: 'Generate pixel-perfect client reports in PDF, multi-sheet Excel (.xlsx), and CSV formats with customizable corporate branding, logo placement, client readiness verdict, and white-labeling.',
+      generateTab: 'Generate Report',
+      brandingTab: 'Branding & Templates',
+      historyTab: 'Report History',
+      schedulesTab: 'Automated Schedules',
+      
+      // Identity Card
+      identityTitle: 'Organization & User Identity',
+      identityBadge: 'Report Author & Client',
+      identitySubtitle: 'Configure your user logon, organization name, and corporate logo. These credentials are automatically injected into executive PDF cover pages, Excel audit metadata, and client CSV headers.',
+      userLogonLabel: 'User Logon / Author Name',
+      userLogonHelp: 'Appears as Prepared By / Author on PDF, Excel & CSV reports.',
+      orgNameLabel: 'Organization / Client Name',
+      orgNameHelp: 'Appears as Prepared For / Client on title blocks.',
+      logoLabel: 'Organization Logo (URL or Path)',
+      logoHelp: 'Logo rendered on executive PDF title page & sheet headers.',
+      saveIdentityBtn: 'Save Identity & Branding',
+      currentIdentity: 'Current report identity:',
+
+      // Report Parameters Form
+      paramsTitle: 'Report Configuration Parameters',
+      domainLabel: 'Monitored Domain',
+      timeRangeLabel: 'Time Range Preset',
+      preset7d: 'Last 7 Days (Tactical)',
+      preset30d: 'Last 30 Days (Standard Audit)',
+      preset90d: 'Last 90 Days (Quarterly Executive)',
+      presetAll: 'All Ingested Data',
+      reporterOrgLabel: 'Reporting Organization (Mail Receiver)',
+      allReceivers: 'All Receivers (Google, Microsoft, etc.)',
+      dispositionLabel: 'Receiver Policy Disposition',
+      allDispositions: 'All Dispositions (none, quarantine, reject)',
+      dispNone: 'Only Delivered (none)',
+      dispQuarantine: 'Only Quarantined (quarantine)',
+      dispReject: 'Only Gateway Blocked (reject)',
+      templatePicker: 'Select Branding Template',
+      exportFormats: 'Export Document Formats',
+      pdfDesc: 'Executive presentation with covers, charts & KPIs',
+      xlsxDesc: 'Multi-sheet workbook with inventory & threats',
+      csvDesc: 'Raw audit metrics and domain readiness',
+      generateBtn: 'Generate Branded Executive Report',
+      generatingBtn: 'Compiling Report Assets from OpenSearch...',
+      
+      // Generated Output
+      successTitle: 'Report Generated Successfully!',
+      downloadPdf: 'Download Executive PDF',
+      downloadXlsx: 'Download Formatted Excel (.xlsx)',
+      downloadCsv: 'Download Raw CSV Bundle',
+
+      // History
+      historyTitle: 'Audit Report Generation History',
+      historySubtitle: 'Complete immutable record of all compiled DMARC executive reports.',
+      colTime: 'Timestamp (UTC)',
+      colScope: 'Scope / Domain',
+      colTemplate: 'Branding Template',
+      colAuthor: 'Generated By',
+      colMetrics: 'Metrics Snapshot',
+      colAssets: 'Download Assets',
+      noHistory: 'No reports generated yet. Compile your first report above.'
+    },
+
+    // User Management
+    users: {
+      title: 'User Access & Account Delegation',
+      subtitle: 'Delegate role-based administrative and reporting access to domains and organizations.',
+      createUserBtn: 'Create New User',
+      colUser: 'User / Identity',
+      colEmail: 'Email Address',
+      colRole: 'Role',
+      colOrg: 'Organization',
+      colLanguage: 'Language',
+      colDomains: 'Assigned Domains',
+      colStatus: 'Status',
+      colCreated: 'Created At',
+      editUser: 'Edit User',
+      deleteUser: 'Delete User',
+      modalCreateTitle: 'Create New User Account',
+      modalEditTitle: 'Edit User Account',
+      emailField: 'Email Address',
+      usernameField: 'User Logon / Username',
+      orgField: 'Organization / Client Name',
+      logoField: 'Organization Logo URL',
+      roleField: 'Role Permissions',
+      langField: 'Preferred Language',
+      domainsField: 'Assigned Monitored Domains',
+      passwordField: 'Password',
+      passwordHelp: 'Leave blank to retain existing password',
+      activeField: 'Account Active'
+    },
+
+    // Login
+    login: {
+      title: 'Sign in to DMARC Sentinel',
+      subtitle: 'Enter your credentials to access the enterprise authentication console.',
+      emailOrUser: 'Email Address or Username',
+      password: 'Password',
+      signInBtn: 'Sign In to Security Console',
+      signingInBtn: 'Authenticating...',
+      securityNote: 'Protected by strict rate-limiting, JWT authentication, and scoped role-based access control.'
+    }
+  },
+
+  es: {
+    // Navigation & Header
+    nav: {
+      brand: 'DMARC',
+      brandSuffix: 'Sentinel',
+      live: 'EN VIVO',
+      tagline: 'Autenticación de Correo Empresarial y Control de Acceso',
+      overview: 'Resumen',
+      health: 'Salud del Dominio',
+      alignment: 'Autenticación y Alineación',
+      threats: 'Inteligencia de Amenazas',
+      policies: 'Políticas y Preparación',
+      reports: 'Informes',
+      records: 'Explorador de Registros',
+      users: 'Control de Acceso',
+      allDomains: 'Todos los Dominios Monitoreados',
+      refresh: 'Actualizar datos de OpenSearch',
+      profile: 'Perfil y Preferencias',
+      manageUsers: 'Gestionar Usuarios y Accesos',
+      changePassword: 'Cambiar Contraseña',
+      signOut: 'Cerrar Sesión',
+      roleAdmin: 'Super Administrador',
+      roleManager: 'Gerente',
+      roleViewer: 'Espectador',
+      language: 'Idioma',
+      switchLanguage: 'Cambiar a Inglés (English)',
+      languageName: 'Español'
+    },
+
+    // User Profile Modal
+    profileModal: {
+      title: 'Perfil de Usuario y Preferencias',
+      subtitle: 'Administre su inicio de sesión, identidad de organización e idioma del sistema',
+      logonLabel: 'Nombre de Usuario / Inicio de Sesión',
+      logonHelp: 'Su identidad como autor en informes ejecutivos y registros de auditoría.',
+      emailLabel: 'Correo Electrónico Registrado',
+      orgLabel: 'Nombre de Organización / Cliente',
+      orgHelp: 'Entidad corporativa o cliente que aparece en portadas de informes personalizados.',
+      logoLabel: 'URL o Ruta del Logotipo Corporativo',
+      logoHelp: 'Ej. templates/assets/sentinel_logo.png o http://...',
+      languageLabel: 'Idioma del Sistema',
+      languageHelp: 'Seleccione su idioma preferido para la consola y los informes generados.',
+      saveBtn: 'Guardar Perfil y Preferencias',
+      savingBtn: 'Guardando Preferencias...',
+      successMsg: '¡Perfil y preferencias guardados exitosamente!',
+      errorMsg: 'Error al actualizar el perfil de usuario.'
+    },
+
+    // Common UI terms
+    common: {
+      loading: 'Cargando datos...',
+      save: 'Guardar',
+      saving: 'Guardando...',
+      cancel: 'Cancelar',
+      close: 'Cerrar',
+      delete: 'Eliminar',
+      edit: 'Editar',
+      create: 'Crear',
+      search: 'Buscar...',
+      filter: 'Filtrar',
+      export: 'Exportar',
+      status: 'Estado',
+      actions: 'Acciones',
+      all: 'Todos',
+      domain: 'Dominio',
+      volume: 'Volumen',
+      date: 'Fecha',
+      pass: 'APROBADO',
+      fail: 'FALLIDO',
+      none: 'Ninguna (none)',
+      quarantine: 'Cuarentena (quarantine)',
+      reject: 'Rechazo (reject)',
+      legitimate: 'Legítimo',
+      suspicious: 'Sospechoso',
+      misconfigured: 'Desconfigurado',
+      active: 'Activo',
+      inactive: 'Inactivo',
+      na: 'N/D'
+    },
+
+    // KPIs & Executive Overview
+    kpi: {
+      title: 'Resumen de Métricas Ejecutivas',
+      totalMessages: 'Total de Mensajes',
+      totalMessagesDesc: 'Volumen total de correo procesado',
+      passRate: 'Tasa de Aprobación DMARC',
+      passRateDesc: 'Porcentaje de conformidad con RFC 7489',
+      compliantVolume: 'Mensajes Conformes',
+      compliantVolumeDesc: 'Correo corporativo legítimo alineado',
+      unalignedThreats: 'No Alineados / Amenazas',
+      unalignedThreatsDesc: 'Intentos de suplantación o correo desconfigurado',
+      deliveryRate: 'Entregados (p=none)',
+      deliveryRateDesc: 'Entrega permitida en bandeja de entrada',
+      quarantined: 'En Cuarentena (spam)',
+      quarantinedDesc: 'Desviados a la carpeta de correo no deseado',
+      blocked: 'Bloqueados en Gateway',
+      blockedDesc: 'Rechazados en el servidor de correo'
+    },
+
+    // Auth & Alignment
+    alignment: {
+      title: 'Matriz de Autenticación y Alineación',
+      subtitle: 'Correlación de autenticación SPF y DKIM con los requisitos de alineación RFC 7489',
+      bothAligned: 'Ambos Alineados (Aprobado/Aprobado)',
+      spfOnly: 'SPF Aprobado & DKIM Fallido',
+      dkimOnly: 'SPF Fallido & DKIM Aprobado',
+      neither: 'SPF Fallido & DKIM Fallido (Suplantación Total)',
+      spfAlignmentRate: 'Tasa de Alineación SPF',
+      dkimAlignmentRate: 'Tasa de Alineación DKIM',
+      dispositionBreakdown: 'Desglose de Aplicación de Políticas del Receptor',
+      compliantVerdict: 'Tráfico Corporativo Totalmente Conforme',
+      spfDkimComparison: 'Comparativa de la Matriz de Alineación'
+    },
+
+    // Volume & Trends
+    trends: {
+      title: 'Volumen de Correo y Tasa de Aprobación en el Tiempo',
+      subtitle: 'Volumen diario de correo y porcentaje de cumplimiento de autenticación',
+      totalVolume: 'Total de Mensajes',
+      passedVolume: 'Conforme (Aprobado)',
+      failedVolume: 'Fallido (Suplantación/Amenaza)',
+      passRatePercent: 'Tasa de Aprobación (%)',
+      noData: 'No hay datos de series temporales disponibles para el filtro seleccionado.'
+    },
+
+    // Traffic & Senders
+    senders: {
+      title: 'Infraestructura de Envío e Inventario de Servicios',
+      subtitle: 'Identificación de proveedores ESP, reenviadores y sistemas de envío directo',
+      senderDomain: 'Dominio Base / ESP',
+      serviceName: 'Proveedor de Servicio',
+      volume: 'Volumen de Mensajes',
+      passRate: 'Tasa de Aprobación',
+      classification: 'Clasificación',
+      legitHelp: 'Infraestructura corporativa o en la nube autorizada',
+      misconfigHelp: 'Proveedor conocido con fallas en SPF o DKIM',
+      suspiciousHelp: 'Infraestructura no autorizada intentando suplantar el dominio'
+    },
+
+    // Threat Intelligence
+    threats: {
+      title: 'Inteligencia de Amenazas y Cazador de Suplantación',
+      subtitle: 'Rastreo de IPs no autorizadas e infraestructura maliciosa que envía a nombre de su dominio',
+      highRiskIPs: 'Fuentes de IP de Alto Riesgo No Alineadas',
+      sourceIp: 'Dirección IP de Origen',
+      reverseDns: 'DNS Inverso (PTR)',
+      country: 'País / Ubicación',
+      asnNetwork: 'Sistema Autónomo (ASN)',
+      spoofedVolume: 'Mensajes Suplantados',
+      verdict: 'Veredicto de Amenaza',
+      threatConfirmed: 'Suplantación Confirmada',
+      noThreats: 'No se detectaron fuentes de suplantación críticas en el alcance actual.'
+    },
+
+    // Policies & Readiness
+    policies: {
+      title: 'Preparación del Dominio y Ruta de Aplicación',
+      subtitle: 'Ruta progresiva para avanzar dominios de p=none a p=quarantine y p=reject',
+      domainName: 'Dominio Monitoreado',
+      currentPolicy: 'Política Actual',
+      recommendedPolicy: 'Recomendación de Aplicación',
+      complianceScore: 'Tasa de Cumplimiento',
+      statusVerdict: 'Veredicto de Preparación',
+      readyReject: 'Listo para p=reject (Bloqueo Estricto)',
+      readyQuarantine: 'Listo para p=quarantine',
+      needsAlignment: 'Requiere Alineación Antes de Aplicar Bloqueo',
+      protected: 'Totalmente Protegido en p=reject'
+    },
+
+    // Raw Logs
+    rawLogs: {
+      title: 'Explorador de Registros Agregados DMARC en OpenSearch',
+      subtitle: 'Inspección directa de registros agregados individuales en OpenSearch',
+      searchPlaceholder: 'Filtrar registros por IP, dominio, selector o disposición...',
+      exportJson: 'Exportar JSON',
+      sourceIp: 'IP de Origen',
+      headerFrom: 'Cabecera From',
+      reporter: 'Org Notificadora',
+      spfResult: 'Resultado SPF',
+      dkimResult: 'Resultado DKIM',
+      dmarcResult: 'DMARC',
+      messages: 'Cantidad',
+      disposition: 'Disposición',
+      timestamp: 'Marca de Tiempo'
+    },
+
+    // Domain Health Diagnostics
+    health: {
+      title: 'Diagnóstico de Salud DNS y Seguridad de Correo',
+      subtitle: 'Verificación en vivo de registros DNS: MX, SPF, DKIM, DMARC y BIMI',
+      enterDomain: 'Ingrese nombre de dominio (ej. example.com)...',
+      runAudit: 'Ejecutar Auditoría de Seguridad',
+      auditing: 'Auditando DNS...',
+      mxTitle: 'Registros de Intercambio de Correo (MX)',
+      spfTitle: 'Marco de Políticas del Remitente (SPF)',
+      dkimTitle: 'Correo Identificado por Claves de Dominio (DKIM)',
+      dmarcTitle: 'Sintaxis y Política del Registro DMARC',
+      bimiTitle: 'Indicadores de Marca para Identificación (BIMI)',
+      overallScore: 'Puntuación de Salud de Seguridad',
+      recordFound: 'Registro Válido y Activo',
+      recordMissing: 'Registro Faltante o Inválido'
+    },
+
+    // Reports Dashboard
+    reports: {
+      title: 'Informes Ejecutivos de DMARC Personalizados',
+      subtitle: 'Genere informes profesionales para clientes en formatos PDF, Excel (.xlsx) y CSV con identidad corporativa, logotipo, veredicto de preparación y marca blanca.',
+      generateTab: 'Generar Informe',
+      brandingTab: 'Identidad y Plantillas',
+      historyTab: 'Historial de Informes',
+      schedulesTab: 'Programaciones Automáticas',
+      
+      // Identity Card
+      identityTitle: 'Identidad de Organización y Usuario',
+      identityBadge: 'Autor y Cliente del Informe',
+      identitySubtitle: 'Configure su inicio de sesión, nombre de organización y logotipo corporativo. Estas credenciales se inyectan automáticamente en las portadas PDF ejecutivas, metadatos de Excel y encabezados CSV.',
+      userLogonLabel: 'Nombre de Usuario / Autor',
+      userLogonHelp: 'Aparece como Preparado Por / Autor en informes PDF, Excel y CSV.',
+      orgNameLabel: 'Nombre de Organización / Cliente',
+      orgNameHelp: 'Aparece como Preparado Para / Cliente en portadas y bloques de título.',
+      logoLabel: 'Logotipo de la Organización (URL o Ruta)',
+      logoHelp: 'Logotipo renderizado en la página de título PDF y encabezados de hojas.',
+      saveIdentityBtn: 'Guardar Identidad y Marca',
+      currentIdentity: 'Identidad actual del informe:',
+
+      // Report Parameters Form
+      paramsTitle: 'Parámetros de Configuración del Informe',
+      domainLabel: 'Dominio Monitoreado',
+      timeRangeLabel: 'Rango de Tiempo',
+      preset7d: 'Últimos 7 Días (Táctico)',
+      preset30d: 'Últimos 30 Días (Auditoría Estándar)',
+      preset90d: 'Últimos 90 Días (Ejecutivo Trimestral)',
+      presetAll: 'Todos los Datos Ingeridos',
+      reporterOrgLabel: 'Organización Notificadora (Receptor de Correo)',
+      allReceivers: 'Todos los Receptores (Google, Microsoft, etc.)',
+      dispositionLabel: 'Disposición de Política del Receptor',
+      allDispositions: 'Todas las Disposiciones (none, quarantine, reject)',
+      dispNone: 'Solo Entregados (none)',
+      dispQuarantine: 'Solo en Cuarentena (quarantine)',
+      dispReject: 'Solo Bloqueados en Gateway (reject)',
+      templatePicker: 'Seleccionar Plantilla de Marca',
+      exportFormats: 'Formatos de Exportación del Documento',
+      pdfDesc: 'Presentación ejecutiva con portadas, gráficos y KPIs',
+      xlsxDesc: 'Libro multi-hoja con inventario y amenazas',
+      csvDesc: 'Métricas de auditoría y preparación del dominio en CSV',
+      generateBtn: 'Generar Informe Ejecutivo Personalizado',
+      generatingBtn: 'Compilando Activos de Informe desde OpenSearch...',
+      
+      // Generated Output
+      successTitle: '¡Informe Generado Exitosamente!',
+      downloadPdf: 'Descargar PDF Ejecutivo',
+      downloadXlsx: 'Descargar Excel Formateado (.xlsx)',
+      downloadCsv: 'Descargar Paquete CSV',
+
+      // History
+      historyTitle: 'Historial de Generación de Informes de Auditoría',
+      historySubtitle: 'Registro inmutable completo de todos los informes ejecutivos de DMARC compilados.',
+      colTime: 'Marca de Tiempo (UTC)',
+      colScope: 'Alcance / Dominio',
+      colTemplate: 'Plantilla de Marca',
+      colAuthor: 'Generado Por',
+      colMetrics: 'Resumen de Métricas',
+      colAssets: 'Descargar Archivos',
+      noHistory: 'Aún no se han generado informes. Compile su primer informe arriba.'
+    },
+
+    // User Management
+    users: {
+      title: 'Control de Acceso y Delegación de Usuarios',
+      subtitle: 'Delegue acceso administrativo y de informes basado en roles para dominios y organizaciones.',
+      createUserBtn: 'Crear Nuevo Usuario',
+      colUser: 'Usuario / Identidad',
+      colEmail: 'Dirección de Correo',
+      colRole: 'Rol',
+      colOrg: 'Organización',
+      colLanguage: 'Idioma',
+      colDomains: 'Dominios Asignados',
+      colStatus: 'Estado',
+      colCreated: 'Fecha de Creación',
+      editUser: 'Editar Usuario',
+      deleteUser: 'Eliminar Usuario',
+      modalCreateTitle: 'Crear Nueva Cuenta de Usuario',
+      modalEditTitle: 'Editar Cuenta de Usuario',
+      emailField: 'Dirección de Correo',
+      usernameField: 'Nombre de Usuario / Inicio de Sesión',
+      orgField: 'Nombre de Organización / Cliente',
+      logoField: 'URL del Logotipo de Organización',
+      roleField: 'Permisos del Rol',
+      langField: 'Idioma Preferido',
+      domainsField: 'Dominios Monitoreados Asignados',
+      passwordField: 'Contraseña',
+      passwordHelp: 'Deje en blanco para conservar la contraseña actual',
+      activeField: 'Cuenta Activa'
+    },
+
+    // Login
+    login: {
+      title: 'Iniciar sesión en DMARC Sentinel',
+      subtitle: 'Ingrese sus credenciales para acceder a la consola de seguridad empresarial.',
+      emailOrUser: 'Correo Electrónico o Nombre de Usuario',
+      password: 'Contraseña',
+      signInBtn: 'Iniciar Sesión en la Consola',
+      signingInBtn: 'Autenticando...',
+      securityNote: 'Protegido por limitación de tasa estricta, tokens JWT y control de acceso basado en roles.'
+    }
+  }
+};

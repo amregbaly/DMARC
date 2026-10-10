@@ -37,8 +37,10 @@ import {
   downloadReportFile,
   updateProfile
 } from '../services/api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function ReportsDashboard({ domains = [], selectedDomain, onSelectDomain, currentUser }) {
+  const { language, t } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState('generate'); // 'generate' | 'templates' | 'history' | 'schedules'
   
   // State: Templates
@@ -48,6 +50,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
   
   // State: Generator parameters
   const [reportDomain, setReportDomain] = useState(selectedDomain || 'all');
+  const [reportLanguage, setReportLanguage] = useState(currentUser?.language || language || 'en');
   const [datePreset, setDatePreset] = useState('30d'); // '7d' | '30d' | '90d' | 'all'
   const [orgFilter, setOrgFilter] = useState('all');
   const [dispositionFilter, setDispositionFilter] = useState('all');
@@ -93,8 +96,15 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
       if (currentUser.username) setIdentityLogon(currentUser.username);
       if (currentUser.organization_name !== undefined) setIdentityOrg(currentUser.organization_name || '');
       if (currentUser.logo_url !== undefined) setIdentityLogo(currentUser.logo_url || '');
+      if (currentUser.language) setReportLanguage(currentUser.language);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (language) {
+      setReportLanguage(language);
+    }
+  }, [language]);
 
   useEffect(() => {
     if (selectedDomain) {
@@ -180,7 +190,8 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
         formats: activeFormats,
         organization_name: identityOrg || currentUser?.organization_name || '',
         user_logon: identityLogon || currentUser?.username || '',
-        logo_url: identityLogo || currentUser?.logo_url || ''
+        logo_url: identityLogo || currentUser?.logo_url || '',
+        language: reportLanguage || language || 'en'
       });
 
       setGeneratedResult(res);
@@ -291,10 +302,10 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
         {/* Sub Navigation Tabs */}
         <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t border-slate-800/80">
           {[
-            { id: 'generate', label: 'Generate Report', icon: FileText },
-            { id: 'templates', label: 'Branding & Templates', icon: Palette },
-            { id: 'history', label: 'Report History', icon: Clock },
-            { id: 'schedules', label: 'Automated Schedules', icon: Calendar }
+            { id: 'generate', label: t('reports.generateTab', 'Generate Report'), icon: FileText },
+            { id: 'templates', label: t('reports.brandingTab', 'Branding & Templates'), icon: Palette },
+            { id: 'history', label: t('reports.historyTab', 'Report History'), icon: Clock },
+            { id: 'schedules', label: t('reports.schedulesTab', 'Automated Schedules'), icon: Calendar }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSubTab === tab.id;
@@ -398,9 +409,54 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                 </div>
               </div>
 
+              {/* Report Language Selector */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-2 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{t('profileModal.languageLabel', 'Report Language / Idioma')}</span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setReportLanguage('en')}
+                    className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2.5 ${
+                      reportLanguage === 'en'
+                        ? 'bg-cyan-950/20 border-cyan-500 shadow-md shadow-cyan-500/10'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-base">🇺🇸</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white flex items-center gap-1">
+                        English (en)
+                        {reportLanguage === 'en' && <Check className="w-3 h-3 text-cyan-400" />}
+                      </div>
+                      <div className="text-[10px] text-slate-400">Executive Report in English</div>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setReportLanguage('es')}
+                    className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2.5 ${
+                      reportLanguage === 'es'
+                        ? 'bg-cyan-950/20 border-cyan-500 shadow-md shadow-cyan-500/10'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-base">🇪🇸</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white flex items-center gap-1">
+                        Español (es)
+                        {reportLanguage === 'es' && <Check className="w-3 h-3 text-cyan-400" />}
+                      </div>
+                      <div className="text-[10px] text-slate-400">Informe Ejecutivo en Español</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Template Picker */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-2">Select Branding Template</label>
+                <label className="block text-xs font-bold text-slate-300 mb-2">{t('reports.templatePicker', 'Select Branding Template')}</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {templates.map((tpl) => {
                     const isSelected = selectedTemplateId === tpl.id;

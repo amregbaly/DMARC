@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Shield, Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Shield, Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2, Globe } from 'lucide-react';
 import { login } from '../services/api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function Login({ onLoginSuccess }) {
+  const { language, setLanguage, t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -12,7 +14,11 @@ export default function Login({ onLoginSuccess }) {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!email.trim() || !password) {
-      setError('Please enter both your email address and password.');
+      setError(
+        language === 'es'
+          ? 'Por favor ingrese su correo electrónico y contraseña.'
+          : 'Please enter both your email address and password.'
+      );
       return;
     }
 
@@ -28,7 +34,10 @@ export default function Login({ onLoginSuccess }) {
         onLoginSuccess(data.user);
       }
     } catch (err) {
-      setError(err.message || 'Invalid email or password.');
+      setError(
+        err.message ||
+          (language === 'es' ? 'Correo o contraseña no válidos.' : 'Invalid email or password.')
+      );
     } finally {
       setLoading(false);
     }
@@ -43,6 +52,17 @@ export default function Login({ onLoginSuccess }) {
       {/* Cyber Grid background lines */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a15_1px,transparent_1px),linear-gradient(to_bottom,#0f172a15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
 
+      {/* Top right language toggle */}
+      <div className="absolute top-6 right-6 z-20">
+        <button
+          onClick={() => setLanguage(language === 'en' ? 'es' : 'en', false)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold shadow-lg transition cursor-pointer"
+        >
+          <Globe className="w-3.5 h-3.5 text-cyan-400" />
+          <span>{language === 'en' ? '🇺🇸 English' : '🇪🇸 Español'}</span>
+        </button>
+      </div>
+
       <div className="w-full max-w-md relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-8">
@@ -53,15 +73,21 @@ export default function Login({ onLoginSuccess }) {
             DMARC<span className="text-cyan-400">Sentinel</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1.5 font-medium">
-            Email Authentication & Security Access Console
+            {t('nav.tagline', 'Enterprise Email Authentication & Access Control')}
           </p>
         </div>
 
         {/* Login Card */}
         <div className="glass-panel rounded-2xl p-8 border border-slate-800 shadow-2xl backdrop-blur-2xl">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-slate-100">Sign in to your account</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Enter your email address to access assigned domain reports</p>
+          <div className="mb-6 flex items-start justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-100">
+                {t('login.title', 'Sign in to DMARC Sentinel')}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {t('login.subtitle', 'Enter your credentials to access the enterprise authentication console.')}
+              </p>
+            </div>
           </div>
 
           {error && (
@@ -75,7 +101,7 @@ export default function Login({ onLoginSuccess }) {
             {/* Email input */}
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Email Address
+                {t('login.emailOrUser', 'Email Address or Username')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -97,7 +123,7 @@ export default function Login({ onLoginSuccess }) {
             {/* Password input */}
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Password
+                {t('login.password', 'Password')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -132,11 +158,11 @@ export default function Login({ onLoginSuccess }) {
               {loading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Authenticating...</span>
+                  <span>{t('login.signingInBtn', 'Authenticating...')}</span>
                 </div>
               ) : (
                 <>
-                  <span>Sign In with Email</span>
+                  <span>{t('login.signInBtn', 'Sign In to Security Console')}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -148,22 +174,19 @@ export default function Login({ onLoginSuccess }) {
             <div className="p-3 bg-cyan-950/30 border border-cyan-800/40 rounded-xl text-[11px] text-cyan-300 flex items-start gap-2">
               <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-cyan-200">Default Super Admin Access:</span>
+                <span className="font-semibold text-cyan-200">
+                  {language === 'es' ? 'Acceso Super Administrador por Defecto:' : 'Default Super Admin Access:'}
+                </span>
                 <div className="font-mono text-cyan-300 mt-0.5">
                   Email: <strong className="text-white">admin@dmarcsentinel.local</strong>
                 </div>
                 <div className="font-mono text-cyan-300 mt-0.5">
-                  Password: <strong className="text-white">admin123</strong>
+                  {language === 'es' ? 'Contraseña' : 'Password'}: <strong className="text-white">Admin123!</strong>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Security Notice */}
-        <p className="text-center text-[11px] text-slate-500 mt-6">
-          Protected by End-to-End Role Scoping & JWT Authentication &bull; RFC 7489 Compliant
-        </p>
       </div>
     </div>
   );

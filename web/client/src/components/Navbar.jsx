@@ -10,8 +10,11 @@ import {
   User as UserIcon,
   Briefcase,
   Eye,
-  FileText
+  FileText,
+  Globe,
+  Settings
 } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function Navbar({
   domains = [],
@@ -23,23 +26,25 @@ export default function Navbar({
   isLoading,
   currentUser,
   onLogout,
-  onChangePasswordClick
+  onChangePasswordClick,
+  onOpenProfileModal
 }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { language, setLanguage, t } = useLanguage();
 
   const isAdmin = currentUser?.role === 'admin';
   const isManager = currentUser?.role === 'manager';
   const canManageUsers = isAdmin || isManager;
 
   const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'health', label: 'Domain Health' },
-    { id: 'alignment', label: 'Auth & Alignment' },
-    { id: 'threats', label: 'Threat Intel & SOC' },
-    { id: 'policies', label: 'Policies & Readiness' },
-    { id: 'reports', label: 'Reports' },
-    { id: 'records', label: 'Log Explorer' },
-    ...(canManageUsers ? [{ id: 'users', label: 'User Access' }] : [])
+    { id: 'overview', label: t('nav.overview', 'Overview') },
+    { id: 'health', label: t('nav.health', 'Domain Health') },
+    { id: 'alignment', label: t('nav.alignment', 'Auth & Alignment') },
+    { id: 'threats', label: t('nav.threats', 'Threat Intel & SOC') },
+    { id: 'policies', label: t('nav.policies', 'Policies & Readiness') },
+    { id: 'reports', label: t('nav.reports', 'Reports') },
+    { id: 'records', label: t('nav.records', 'Log Explorer') },
+    ...(canManageUsers ? [{ id: 'users', label: t('nav.users', 'User Access') }] : [])
   ];
 
   return (
@@ -60,11 +65,11 @@ export default function Navbar({
                   DMARC<span className="text-cyan-400">Sentinel</span>
                 </span>
                 <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-md">
-                  LIVE
+                  {t('nav.live', 'LIVE')}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-                Enterprise Email Authentication & Access Control
+                {t('nav.tagline', 'Enterprise Email Authentication & Access Control')}
               </p>
             </div>
           </div>
@@ -92,8 +97,19 @@ export default function Navbar({
             })}
           </nav>
 
-          {/* Filters, User Profile & Actions */}
-          <div className="flex items-center gap-3">
+          {/* Filters, Language Toggle, User Profile & Actions */}
+          <div className="flex items-center gap-2.5">
+            {/* Quick Language Toggle Pill */}
+            <button
+              id="language-toggle-btn"
+              onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
+              title={language === 'en' ? t('nav.switchLanguage', 'Switch to Spanish (Español)') : t('nav.switchLanguage', 'Cambiar a Inglés (English)')}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 transition cursor-pointer font-medium"
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-semibold text-[11px]">{language === 'en' ? '🇺🇸 EN' : '🇪🇸 ES'}</span>
+            </button>
+
             {/* Domain Filter (hidden on user management tab) */}
             {activeTab !== 'users' && (
               <div className="relative flex items-center">
@@ -106,8 +122,8 @@ export default function Navbar({
                 >
                   <option value="all">
                     {isAdmin
-                      ? `All Domains (${domains.length})`
-                      : `All My Domains (${domains.length})`}
+                      ? `${t('nav.allDomains', 'All Domains')} (${domains.length})`
+                      : `${t('nav.allDomains', 'All Monitored Domains')} (${domains.length})`}
                   </option>
                   {domains.map((dom) => (
                     <option key={dom} value={dom}>
@@ -124,7 +140,7 @@ export default function Navbar({
                 id="refresh-button"
                 onClick={onRefresh}
                 disabled={isLoading}
-                title="Refresh Data"
+                title={t('nav.refresh', 'Refresh Data')}
                 className="p-1.5 text-slate-400 hover:text-cyan-400 bg-slate-900/80 border border-slate-800 hover:border-slate-700 rounded-lg transition-all cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw
@@ -154,10 +170,14 @@ export default function Navbar({
                   </div>
                   <div className="text-left hidden sm:block max-w-[150px]">
                     <span className="font-semibold text-slate-200 block leading-tight truncate">
-                      {currentUser.email || currentUser.username}
+                      {currentUser.username || currentUser.email}
                     </span>
                     <span className="text-[10px] text-slate-400 block leading-tight capitalize">
-                      {currentUser.role}
+                      {currentUser.role === 'admin'
+                        ? t('nav.roleAdmin', 'Super Admin')
+                        : currentUser.role === 'manager'
+                        ? t('nav.roleManager', 'Manager')
+                        : t('nav.roleViewer', 'Viewer')}
                     </span>
                   </div>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -170,15 +190,20 @@ export default function Navbar({
                       className="fixed inset-0 z-30"
                       onClick={() => setUserMenuOpen(false)}
                     />
-                    <div className="absolute right-0 mt-2 w-56 rounded-2xl glass-panel bg-slate-900/95 border border-slate-800 shadow-2xl z-40 py-1.5 text-xs">
+                    <div className="absolute right-0 mt-2 w-60 rounded-2xl glass-panel bg-slate-900/95 border border-slate-800 shadow-2xl z-40 py-1.5 text-xs">
                       {/* User Info Header */}
                       <div className="px-3.5 py-2.5 border-b border-slate-800">
-                        <div className="font-semibold text-slate-200">
+                        <div className="font-semibold text-white">
                           {currentUser.username}
                         </div>
                         <div className="text-[11px] text-slate-400 truncate">
                           {currentUser.email || 'No email registered'}
                         </div>
+                        {currentUser.organization_name && (
+                          <div className="text-[10px] text-cyan-400 truncate mt-0.5 font-medium">
+                            {currentUser.organization_name}
+                          </div>
+                        )}
                         <div className="mt-1.5 flex items-center gap-1.5">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
@@ -190,11 +215,54 @@ export default function Navbar({
                             }`}
                           >
                             {currentUser.role === 'admin'
-                              ? 'Super Admin'
+                              ? t('nav.roleAdmin', 'Super Admin')
                               : currentUser.role === 'manager'
-                              ? 'Manager'
-                              : 'Sub-User / Viewer'}
+                              ? t('nav.roleManager', 'Manager')
+                              : t('nav.roleViewer', 'Sub-User / Viewer')}
                           </span>
+                        </div>
+                      </div>
+
+                      {/* Profile & Preferences */}
+                      <button
+                        id="menu-user-profile"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          if (onOpenProfileModal) onOpenProfileModal();
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-slate-300 hover:text-cyan-300 hover:bg-slate-800/80 flex items-center gap-2 transition cursor-pointer font-medium"
+                      >
+                        <UserIcon className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{t('nav.profile', 'Profile & Preferences')}</span>
+                      </button>
+
+                      {/* Language Switcher in Dropdown */}
+                      <div className="px-3.5 py-2 flex items-center justify-between text-slate-300 border-t border-b border-slate-800/60 my-1 bg-slate-950/40">
+                        <span className="flex items-center gap-2 text-xs">
+                          <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>{t('nav.language', 'Language')}</span>
+                        </span>
+                        <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                          <button
+                            onClick={() => setLanguage('en')}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                              language === 'en'
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            🇺🇸 EN
+                          </button>
+                          <button
+                            onClick={() => setLanguage('es')}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                              language === 'es'
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            🇪🇸 ES
+                          </button>
                         </div>
                       </div>
 
@@ -208,7 +276,7 @@ export default function Navbar({
                           className="w-full text-left px-3.5 py-2 text-slate-300 hover:text-cyan-300 hover:bg-slate-800/80 flex items-center gap-2 transition cursor-pointer"
                         >
                           <Users className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>Manage Users & Access</span>
+                          <span>{t('nav.manageUsers', 'Manage Users & Access')}</span>
                         </button>
                       )}
 
@@ -221,7 +289,7 @@ export default function Navbar({
                         className="w-full text-left px-3.5 py-2 text-slate-300 hover:text-cyan-300 hover:bg-slate-800/80 flex items-center gap-2 transition cursor-pointer"
                       >
                         <Key className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Change Password</span>
+                        <span>{t('nav.changePassword', 'Change Password')}</span>
                       </button>
 
                       <div className="my-1 border-t border-slate-800" />
@@ -236,7 +304,7 @@ export default function Navbar({
                         className="w-full text-left px-3.5 py-2 text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 transition cursor-pointer font-medium"
                       >
                         <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Sign Out</span>
+                        <span>{t('nav.signOut', 'Sign Out')}</span>
                       </button>
                     </div>
                   </>

@@ -1,9 +1,12 @@
 import React from 'react';
-import { Network, Server, Globe2, Building2, ExternalLink } from 'lucide-react';
+import { Network, Server, Globe2, Building2 } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function TrafficAndSenders({ traffic }) {
+  const { t, language } = useLanguage();
   if (!traffic) return null;
 
+  const isEs = language === 'es';
   const { topIps = [], topDomains = [], topOrgs = [], countries = [] } = traffic;
 
   return (
@@ -12,10 +15,10 @@ export default function TrafficAndSenders({ traffic }) {
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
             <Network className="w-5 h-5 text-cyan-400" />
-            Traffic & Senders Intelligence
+            {t('senders.title', 'Sending Infrastructure & Service Inventory')}
           </h2>
           <p className="text-xs text-slate-400">
-            Source IP addresses, mail servers, organizations, and global geolocation breakdown.
+            {t('senders.subtitle', 'Identification of third-party ESPs, forwarders, and direct sending systems')}
           </p>
         </div>
       </div>
@@ -25,21 +28,25 @@ export default function TrafficAndSenders({ traffic }) {
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Server className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-semibold text-slate-200">Top Sending IP Addresses</h3>
+            <h3 className="text-sm font-semibold text-slate-200">
+              {isEs ? 'Direcciones IP Principales de Envío' : 'Top Sending IP Addresses'}
+            </h3>
           </div>
-          <span className="text-xs text-slate-400 font-mono">Ranked by volume</span>
+          <span className="text-xs text-slate-400 font-mono">
+            {isEs ? 'Ordenado por volumen' : 'Ranked by volume'}
+          </span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-900/60 border-b border-slate-800 text-slate-400 font-medium">
               <tr>
-                <th className="px-6 py-3">Source IP</th>
-                <th className="px-6 py-3">Reverse DNS / Hostname</th>
-                <th className="px-6 py-3">ASN & Network</th>
-                <th className="px-6 py-3">Geo</th>
-                <th className="px-6 py-3 text-right">Messages</th>
-                <th className="px-6 py-3">Auth Rate</th>
+                <th className="px-6 py-3">{isEs ? 'IP de Origen' : 'Source IP'}</th>
+                <th className="px-6 py-3">{isEs ? 'DNS Inverso / Host' : 'Reverse DNS / Hostname'}</th>
+                <th className="px-6 py-3">{isEs ? 'ASN y Red' : 'ASN & Network'}</th>
+                <th className="px-6 py-3">{isEs ? 'Geo' : 'Geo'}</th>
+                <th className="px-6 py-3 text-right">{isEs ? 'Mensajes' : 'Messages'}</th>
+                <th className="px-6 py-3">{isEs ? 'Tasa de Autenticación' : 'Auth Rate'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
@@ -51,7 +58,7 @@ export default function TrafficAndSenders({ traffic }) {
                       {ipObj.ip}
                     </td>
                     <td className="px-6 py-3 text-slate-300 max-w-xs truncate font-mono text-[11px]">
-                      {ipObj.reverseDns}
+                      {ipObj.reverseDns || (isEs ? 'Sin PTR' : 'No PTR')}
                     </td>
                     <td className="px-6 py-3 text-slate-300 text-[11px]">
                       <span className="font-mono text-slate-400">AS{ipObj.asn}</span> {ipObj.asName}
@@ -95,7 +102,9 @@ export default function TrafficAndSenders({ traffic }) {
         <div className="glass-panel rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <Globe2 className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-semibold text-slate-200">Header-From Domains</h3>
+            <h3 className="text-sm font-semibold text-slate-200">
+              {isEs ? 'Dominios Header-From' : 'Header-From Domains'}
+            </h3>
           </div>
           <div className="space-y-3">
             {topDomains.map((dom, i) => (
@@ -113,7 +122,9 @@ export default function TrafficAndSenders({ traffic }) {
         <div className="glass-panel rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <Building2 className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-semibold text-slate-200">Reporting Organizations</h3>
+            <h3 className="text-sm font-semibold text-slate-200">
+              {isEs ? 'Organizaciones Informantes' : 'Reporting Organizations'}
+            </h3>
           </div>
           <div className="space-y-3">
             {topOrgs.map((org, i) => (
@@ -131,7 +142,9 @@ export default function TrafficAndSenders({ traffic }) {
         <div className="glass-panel rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <Globe2 className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-semibold text-slate-200">Origin Countries</h3>
+            <h3 className="text-sm font-semibold text-slate-200">
+              {isEs ? 'Países de Origen' : 'Origin Countries'}
+            </h3>
           </div>
           <div className="space-y-3">
             {countries.map((c, i) => (
@@ -140,7 +153,9 @@ export default function TrafficAndSenders({ traffic }) {
                   <span className="px-1.5 py-0.5 bg-slate-800 rounded font-mono text-[10px] text-slate-300">
                     {c.country}
                   </span>
-                  <span className="text-slate-300 text-xs">Origin</span>
+                  <span className="text-slate-300 text-xs">
+                    {isEs ? 'Origen' : 'Origin'}
+                  </span>
                 </div>
                 <span className="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
                   {c.count.toLocaleString()}

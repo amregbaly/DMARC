@@ -26,6 +26,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { fetchDomainHealth } from '../services/api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 // Reusable Copyable Box
 function CopyableRecord({ record, label = 'Published Record' }) {
@@ -189,6 +190,7 @@ function SpfTreeNode({ node, isRoot = false }) {
 }
 
 export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDomain, domains = [] }) {
+  const { t, language } = useLanguage();
   const [domainInput, setDomainInput] = useState(selectedDomain === 'all' ? 'voxera.net' : selectedDomain);
   const [selectorInput, setSelectorInput] = useState('');
   const [activeDomain, setActiveDomain] = useState(selectedDomain === 'all' ? 'voxera.net' : selectedDomain);
@@ -326,13 +328,13 @@ export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDo
               </div>
               <div>
                 <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                  Domain Health & Security Analyzer
+                  {t('health.title', 'Domain Health & Security Analyzer')}
                   <span className="px-2 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 rounded-full font-mono uppercase">
                     Live DNS Audit
                   </span>
                 </h1>
                 <p className="text-xs text-slate-400">
-                  Real-time RFC compliance, cryptographic policy verification, and recursive SPF lookup tree
+                  {t('health.subtitle', 'Real-time RFC compliance, cryptographic policy verification, and recursive SPF lookup tree')}
                 </p>
               </div>
             </div>
@@ -370,7 +372,7 @@ export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDo
               type="text"
               value={domainInput}
               onChange={(e) => setDomainInput(e.target.value)}
-              placeholder="Enter domain (e.g. voxera.net)"
+              placeholder={t('health.enterDomain', 'Enter domain (e.g. voxera.net)')}
               className="w-full bg-slate-900/90 border border-slate-750 hover:border-slate-600 focus:border-cyan-500 text-sm text-slate-100 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all font-mono"
             />
           </div>
@@ -395,7 +397,7 @@ export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDo
               className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>{loading ? 'Auditing...' : 'Analyze Domain'}</span>
+              <span>{loading ? t('health.auditing', 'Auditing...') : t('health.runAudit', 'Analyze Domain')}</span>
             </button>
 
             <button

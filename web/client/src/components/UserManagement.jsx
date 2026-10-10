@@ -20,8 +20,10 @@ import {
   updateUser,
   deleteUser
 } from '../services/api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function UserManagement({ currentUser }) {
+  const { language, t } = useLanguage();
   const [users, setUsers] = useState([]);
   const [assignableDomains, setAssignableDomains] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,7 @@ export default function UserManagement({ currentUser }) {
   const [formEmail, setFormEmail] = useState('');
   const [formOrgName, setFormOrgName] = useState('');
   const [formLogoUrl, setFormLogoUrl] = useState('');
+  const [formLanguage, setFormLanguage] = useState('en');
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState('viewer');
   const [formDomains, setFormDomains] = useState([]);
@@ -76,6 +79,7 @@ export default function UserManagement({ currentUser }) {
     setFormEmail('');
     setFormOrgName('');
     setFormLogoUrl('');
+    setFormLanguage('en');
     setFormPassword('');
     setFormRole(isManager ? 'viewer' : 'manager');
     // If manager, default domains to manager's first domain or empty
@@ -91,6 +95,7 @@ export default function UserManagement({ currentUser }) {
     setFormEmail(u.email || '');
     setFormOrgName(u.organization_name || '');
     setFormLogoUrl(u.logo_url || '');
+    setFormLanguage(u.language || 'en');
     setFormPassword(''); // blank means do not change
     setFormRole(u.role);
     setFormDomains(u.domains || []);
@@ -136,6 +141,7 @@ export default function UserManagement({ currentUser }) {
           username: formUsername.trim() || cleanEmail.split('@')[0],
           organization_name: formOrgName.trim(),
           logo_url: formLogoUrl.trim(),
+          language: formLanguage,
           isActive: formIsActive,
           domains: formDomains
         };
@@ -160,6 +166,7 @@ export default function UserManagement({ currentUser }) {
           organization_name: formOrgName.trim(),
           logo_url: formLogoUrl.trim(),
           password: formPassword.trim(),
+          language: formLanguage,
           role: isManager ? 'viewer' : formRole,
           domains: formDomains
         };
@@ -211,7 +218,7 @@ export default function UserManagement({ currentUser }) {
             </div>
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                Access Control & User Management
+                {t('users.title', 'Access Control & User Management')}
                 <span
                   className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
                     isAdmin
@@ -223,9 +230,7 @@ export default function UserManagement({ currentUser }) {
                 </span>
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                {isAdmin
-                  ? 'Manage system users, assign domain visibility, and authorize client managers.'
-                  : 'Manage sub-users and delegate access to your assigned domains.'}
+                {t('users.subtitle', 'Delegate role-based administrative and reporting access to domains and organizations.')}
               </p>
             </div>
           </div>
@@ -237,7 +242,7 @@ export default function UserManagement({ currentUser }) {
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs shadow-lg shadow-cyan-500/25 transition-all duration-200 cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
-          <span>{isManager ? 'Create Sub-User' : 'Add New User'}</span>
+          <span>{isManager ? 'Create Sub-User' : t('users.createUserBtn', 'Create New User')}</span>
         </button>
       </div>
 
@@ -319,24 +324,25 @@ export default function UserManagement({ currentUser }) {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-900/60 text-slate-400 border-b border-slate-800/80">
-                <th className="py-3 px-4 font-semibold">User</th>
-                <th className="py-3 px-4 font-semibold">Role</th>
-                <th className="py-3 px-4 font-semibold">Assigned Domains Scope</th>
+                <th className="py-3 px-4 font-semibold">{t('users.colUser', 'User')}</th>
+                <th className="py-3 px-4 font-semibold">{t('users.colRole', 'Role')}</th>
+                <th className="py-3 px-4 font-semibold">{t('users.colLanguage', 'Language')}</th>
+                <th className="py-3 px-4 font-semibold">{t('users.colDomains', 'Assigned Domains Scope')}</th>
                 <th className="py-3 px-4 font-semibold">Created By</th>
-                <th className="py-3 px-4 font-semibold">Status</th>
-                <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                <th className="py-3 px-4 font-semibold">{t('users.colStatus', 'Status')}</th>
+                <th className="py-3 px-4 font-semibold text-right">{t('common.actions', 'Actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                  <td colSpan={7} className="py-8 text-center text-slate-500">
                     Loading accounts...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                  <td colSpan={7} className="py-8 text-center text-slate-500">
                     No users found. Click &quot;Add New User&quot; above to create one.
                   </td>
                 </tr>
@@ -400,6 +406,14 @@ export default function UserManagement({ currentUser }) {
                             Sub-User / Viewer
                           </span>
                         )}
+                      </td>
+
+                      {/* Language Column */}
+                      <td className="py-3.5 px-4">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-800/80 text-slate-300 border border-slate-700/80">
+                          <Globe className="w-3 h-3 text-cyan-400" />
+                          <span>{u.language === 'es' ? '🇪🇸 ES' : '🇺🇸 EN'}</span>
+                        </span>
                       </td>
 
                       {/* Domain Scope Column */}
@@ -649,6 +663,41 @@ export default function UserManagement({ currentUser }) {
                   </p>
                 </div>
               )}
+
+              {/* Preferred Language Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{t('users.langField', 'Preferred Language / Idioma')}</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormLanguage('en')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 transition cursor-pointer ${
+                      formLanguage === 'en'
+                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-200'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>🇺🇸</span>
+                    <span>English</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormLanguage('es')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-2 transition cursor-pointer ${
+                      formLanguage === 'es'
+                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-200'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>🇪🇸</span>
+                    <span>Español</span>
+                  </button>
+                </div>
+              </div>
 
               {/* Status Toggle */}
               <div className="flex items-center justify-between p-3 bg-slate-900/60 rounded-xl border border-slate-800">

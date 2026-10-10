@@ -233,6 +233,7 @@ app.post('/api/auth/login', async (req, res) => {
         role: user.role,
         organization_name: user.organization_name || '',
         logo_url: user.logo_url || '',
+        language: user.language || 'en',
         domains: user.domains || []
       }
     });
@@ -242,14 +243,15 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Update current user's profile / identity
+// Update current user's profile / identity & language
 app.put('/api/auth/profile', authenticateToken, async (req, res) => {
   try {
-    const { username, organization_name, logo_url } = req.body;
+    const { username, organization_name, logo_url, language } = req.body;
     const updated = db.updateUserProfile(req.user.id, {
       username,
       organization_name,
-      logo_url
+      logo_url,
+      language
     });
     if (!updated) {
       return res.status(404).json({ error: 'User account not found' });
@@ -263,6 +265,7 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
         role: updated.role,
         organization_name: updated.organization_name || '',
         logo_url: updated.logo_url || '',
+        language: updated.language || 'en',
         domains: updated.domains || []
       }
     });
@@ -364,7 +367,7 @@ app.get('/api/users/assignable-domains', authenticateToken, requireRole('admin',
 // Create new user (Email-centric)
 app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
   try {
-    const { email, username, password, role, domains, organization_name, logo_url } = req.body;
+    const { email, username, password, role, domains, organization_name, logo_url, language } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -423,6 +426,7 @@ app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async
       role: finalRole,
       organization_name,
       logo_url,
+      language: language || 'en',
       parentId,
       domains: finalDomains
     });
@@ -434,6 +438,7 @@ app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async
       role: newUser.role,
       organization_name: newUser.organization_name || '',
       logo_url: newUser.logo_url || '',
+      language: newUser.language || 'en',
       parent_id: req.user.role === 'admin' ? newUser.parent_id : undefined,
       is_active: newUser.is_active,
       created_at: newUser.created_at,
@@ -497,6 +502,7 @@ app.put('/api/users/:id', authenticateToken, requireRole('admin', 'manager'), as
       role: req.user.role === 'admin' ? role : target.role,
       organization_name,
       logo_url,
+      language,
       isActive,
       domains
     });
@@ -508,6 +514,7 @@ app.put('/api/users/:id', authenticateToken, requireRole('admin', 'manager'), as
       role: updated.role,
       organization_name: updated.organization_name || '',
       logo_url: updated.logo_url || '',
+      language: updated.language || 'en',
       parent_id: req.user.role === 'admin' ? updated.parent_id : undefined,
       is_active: updated.is_active,
       updated_at: updated.updated_at,
@@ -2139,6 +2146,11 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
     }
     if (targetLogo) {
       args.push('--logo', targetLogo);
+    }
+
+    const reportLang = (req.body.language || req.user.language || 'en').trim().toLowerCase();
+    if (['en', 'es'].includes(reportLang)) {
+      args.push('--language', reportLang);
     }
 
     // Reporter org filter (e.g. google.com, microsoft.com)

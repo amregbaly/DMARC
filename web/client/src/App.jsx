@@ -12,6 +12,8 @@ import UserManagement from './components/UserManagement';
 import ReportsDashboard from './components/ReportsDashboard';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
+import UserProfileModal from './components/UserProfileModal';
+import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import {
   fetchMe,
   clearToken,
@@ -25,10 +27,10 @@ import {
 } from './services/api';
 import { AlertCircle, RefreshCw, Shield } from 'lucide-react';
 
-export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [authChecking, setAuthChecking] = useState(true);
+function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
+  const { t } = useLanguage();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [domains, setDomains] = useState([]);
@@ -43,33 +45,6 @@ export default function App() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // Check auth on initial mount
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const data = await fetchMe();
-        if (data && data.user) {
-          setCurrentUser(data.user);
-        }
-      } catch (err) {
-        setCurrentUser(null);
-      } finally {
-        setAuthChecking(false);
-      }
-    }
-
-    checkAuth();
-
-    // Listen to global logout event
-    function handleLogoutEvent() {
-      setCurrentUser(null);
-      setDomains([]);
-      setOverview(null);
-    }
-    window.addEventListener('auth:logout', handleLogoutEvent);
-    return () => window.removeEventListener('auth:logout', handleLogoutEvent);
-  }, []);
 
   // When currentUser changes / is authenticated, load filters and data
   useEffect(() => {
@@ -132,6 +107,8 @@ export default function App() {
       setAlignment(alignmentRes);
       setTimeseries(timeseriesRes);
       setTraffic(trafficRes);
+      setTimeseries(timeseriesRes);
+      setTraffic(trafficRes);
       setThreats(threatsRes);
       setPolicies(policiesRes);
     } catch (err) {
@@ -142,34 +119,6 @@ export default function App() {
     }
   }
 
-  function handleLogout() {
-    clearToken();
-    setCurrentUser(null);
-    setSelectedDomain('all');
-    setDomains([]);
-  }
-
-  function handleLoginSuccess(user) {
-    setCurrentUser(user);
-    setActiveTab('overview');
-  }
-
-  // 1. Initial Auth Check Loading State
-  if (authChecking) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-sans">
-        <RefreshCw className="w-8 h-8 animate-spin text-cyan-400 mb-3" />
-        <p className="text-xs text-slate-500 font-mono">Initializing DMARC Sentinel Security Engine...</p>
-      </div>
-    );
-  }
-
-  // 2. Unauthenticated: Show Login Gate
-  if (!currentUser) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  // 3. Authenticated: Render Main Application
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
       {/* Top Navbar */}
@@ -182,8 +131,9 @@ export default function App() {
         onRefresh={loadDashboardData}
         isLoading={loading}
         currentUser={currentUser}
-        onLogout={handleLogout}
+        onLogout={onLogout}
         onChangePasswordClick={() => setIsPasswordModalOpen(true)}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -277,22 +227,94 @@ export default function App() {
             <Shield className="w-4 h-4 text-cyan-500" />
             <span className="font-semibold text-slate-400">DMARC Sentinel</span>
             <span>&bull;</span>
-            <span>Role-Based Access Control Active</span>
+            <span>{t('nav.tagline', 'Enterprise Email Authentication & Access Control')}</span>
           </div>
 
           <div className="flex items-center gap-4 text-[11px] font-mono">
-            <span className="text-slate-400">Logged in as: <strong className="text-slate-200">{currentUser.email || `@${currentUser.username}`}</strong> ({currentUser.role})</span>
+            <span className="text-slate-400">
+              Logged in as: <strong className="text-slate-200">{currentUser.email || `@${currentUser.username}`}</strong> ({currentUser.role})
+            </span>
             <span>&bull;</span>
             <span className="text-slate-400">RFC 7489 Compliant</span>
           </div>
         </div>
       </footer>
 
-      {/* Change Password Modal */}
+      {/* Modals */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        currentUser={currentUser}
+        onUserUpdated={setCurrentUser}
+        onChangePasswordClick={() => setIsPasswordModalOpen(true)}
+      />
+
       <ChangePasswordModal
         isOpen={isPasswordModalOpen}
         onClose={() => setIsPasswordModalOpen(false)}
       />
     </div>
+  );
+}
+
+export default function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+
+  // Check auth on initial mount
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const data = await fetchMe();
+        if (data && data.user) {
+          setCurrentUser(data.user);
+        }
+      } catch (err) {
+        setCurrentUser(null);
+      } finally {
+        setAuthChecking(false);
+      }
+    }
+
+    checkAuth();
+
+    // Listen to global logout event
+    function handleLogoutEvent() {
+      setCurrentUser(null);
+    }
+    window.addEventListener('auth:logout', handleLogoutEvent);
+    return () => window.removeEventListener('auth:logout', handleLogoutEvent);
+  }, []);
+
+  function handleLogout() {
+    clearToken();
+    setCurrentUser(null);
+  }
+
+  function handleLoginSuccess(user) {
+    setCurrentUser(user);
+  }
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 font-sans">
+        <RefreshCw className="w-8 h-8 animate-spin text-cyan-400 mb-3" />
+        <p className="text-xs text-slate-500 font-mono">Initializing DMARC Sentinel Security Engine...</p>
+      </div>
+    );
+  }
+
+  return (
+    <LanguageProvider currentUser={currentUser} onUserUpdated={setCurrentUser}>
+      {!currentUser ? (
+        <Login onLoginSuccess={handleLoginSuccess} />
+      ) : (
+        <DashboardApp
+          currentUser={currentUser}
+          setCurrentUser={setCurrentUser}
+          onLogout={handleLogout}
+        />
+      )}
+    </LanguageProvider>
   );
 }

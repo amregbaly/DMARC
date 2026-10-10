@@ -49,6 +49,7 @@ class GenerateReportRequest(BaseModel):
     template_id: Optional[str] = "default"
     formats: Optional[List[str]] = ["pdf", "xlsx", "csv"]
     allowed_domains: Optional[List[str]] = None
+    language: Optional[str] = None
 
 def load_template(template_id: str) -> dict:
     tpl_path = os.path.join(TEMPLATES_DIR, f"{template_id}.json")
@@ -73,12 +74,15 @@ def generate_report_bundle(
     formats: Optional[List[str]] = None,
     output_dir: str = OUTPUT_DIR,
     allowed_domains: Optional[List[str]] = None,
+    language: Optional[str] = None,
     org_name: Optional[str] = None # backwards-compatible alias for client_org
 ) -> dict:
     if formats is None:
         formats = ["pdf", "xlsx", "csv"]
         
     tpl = load_template(template_id)
+    if language and language.strip().lower() in ["en", "es"]:
+        tpl["language"] = language.strip().lower()
     effective_org = (client_org or org_name or "").strip()
     if effective_org:
         tpl["prepared_for"] = effective_org
@@ -206,7 +210,8 @@ def generate_report_api(req: GenerateReportRequest):
             disposition=req.disposition,
             template_id=req.template_id or "default",
             formats=req.formats or ["pdf", "xlsx", "csv"],
-            allowed_domains=req.allowed_domains
+            allowed_domains=req.allowed_domains,
+            language=req.language
         )
         return res
     except Exception as e:
@@ -233,6 +238,7 @@ if __name__ == "__main__":
     parser.add_argument("--date-from", default="", help="Start date ISO string")
     parser.add_argument("--date-to", default="", help="End date ISO string")
     parser.add_argument("--allowed-domains", default="", help="Comma-separated allowed domains for non-admin")
+    parser.add_argument("--language", default="", help="Report language (en, es)")
     parser.add_argument("--formats", default="pdf,xlsx,csv", help="Comma-separated formats (pdf,xlsx,csv)")
     parser.add_argument("--output-dir", default=OUTPUT_DIR, help="Output destination folder")
     parser.add_argument("--serve", action="store_true", help="Start the FastAPI HTTP server")
@@ -259,6 +265,7 @@ if __name__ == "__main__":
             template_id=args.template,
             formats=fmt_list,
             output_dir=args.output_dir,
-            allowed_domains=allowed_dom_list
+            allowed_domains=allowed_dom_list,
+            language=args.language or None
         )
         print(json.dumps(result, indent=2))

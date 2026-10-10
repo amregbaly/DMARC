@@ -6,16 +6,19 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  Legend
+  ResponsiveContainer
 } from 'recharts';
 import { TrendingUp } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function VolumeTrends({ timeseries = [] }) {
+  const { t, language } = useLanguage();
+  const isEs = language === 'es';
+
   if (!timeseries || timeseries.length === 0) {
     return (
       <div className="glass-panel rounded-2xl p-6 text-center text-slate-400">
-        No timeseries data available for this selection.
+        {t('trends.noData', 'No timeseries data available for this selection.')}
       </div>
     );
   }
@@ -48,24 +51,24 @@ export default function VolumeTrends({ timeseries = [] }) {
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-cyan-400" />
-            Message Volume & Authentication Over Time
+            {t('trends.title', 'Message Volume & Authentication Over Time')}
           </h2>
           <p className="text-xs text-slate-400">
-            Daily distribution of passed emails, authentication failures, and quarantined/rejected traffic.
+            {t('trends.subtitle', 'Daily distribution of passed emails, authentication failures, and quarantined/rejected traffic.')}
           </p>
         </div>
         <div className="flex items-center gap-4 text-xs font-mono">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            <span className="text-slate-300">Passed</span>
+            <span className="text-slate-300">{isEs ? 'Aprobados' : 'Passed'}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-            <span className="text-slate-300">Failed</span>
+            <span className="text-slate-300">{isEs ? 'Fallidos' : 'Failed'}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-            <span className="text-slate-300">Quarantine/Reject</span>
+            <span className="text-slate-300">{isEs ? 'Cuarentena/Bloqueo' : 'Quarantine/Reject'}</span>
           </div>
         </div>
       </div>
@@ -108,7 +111,7 @@ export default function VolumeTrends({ timeseries = [] }) {
             <Area
               type="monotone"
               dataKey="passed"
-              name="Passed DMARC"
+              name={isEs ? 'DMARC Aprobado' : 'Passed DMARC'}
               stroke="#10b981"
               strokeWidth={2}
               fillOpacity={1}
@@ -117,7 +120,7 @@ export default function VolumeTrends({ timeseries = [] }) {
             <Area
               type="monotone"
               dataKey="failed"
-              name="Failed DMARC"
+              name={isEs ? 'DMARC Fallido' : 'Failed DMARC'}
               stroke="#f43f5e"
               strokeWidth={2}
               fillOpacity={1}
@@ -126,7 +129,7 @@ export default function VolumeTrends({ timeseries = [] }) {
             <Area
               type="monotone"
               dataKey="quarantinedOrRejected"
-              name="Quarantined / Rejected"
+              name={isEs ? 'En Cuarentena / Rechazado' : 'Quarantined / Rejected'}
               stroke="#f59e0b"
               strokeWidth={1.5}
               strokeDasharray="4 4"

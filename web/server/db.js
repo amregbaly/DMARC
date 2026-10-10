@@ -29,6 +29,7 @@ export function initDb() {
       role TEXT NOT NULL CHECK(role IN ('admin', 'manager', 'viewer')),
       organization_name TEXT,
       logo_url TEXT,
+      language TEXT NOT NULL DEFAULT 'en',
       parent_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
@@ -77,12 +78,14 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_reports_history_created_at ON reports_history(created_at);
   `);
 
-  // Run schema migrations for existing database files
   try {
     db.prepare('ALTER TABLE users ADD COLUMN organization_name TEXT').run();
   } catch (e) {}
   try {
     db.prepare('ALTER TABLE users ADD COLUMN logo_url TEXT').run();
+  } catch (e) {}
+  try {
+    db.prepare("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'en'").run();
   } catch (e) {}
 
   // Ensure initial admin exists if user table is brand new
@@ -152,7 +155,7 @@ export function getAllUsers(caller) {
   let stmt;
   if (caller.role === 'admin') {
     stmt = db.prepare(`
-      SELECT u.id, u.username, u.email, u.role, u.organization_name, u.logo_url, u.parent_id, u.is_active, u.created_at, u.updated_at,
+      SELECT u.id, u.username, u.email, u.role, u.organization_name, u.logo_url, u.language, u.parent_id, u.is_active, u.created_at, u.updated_at,
              p.username as parent_username
       FROM users u
       LEFT JOIN users p ON u.parent_id = p.id
@@ -160,7 +163,7 @@ export function getAllUsers(caller) {
     `);
   } else if (caller.role === 'manager') {
     stmt = db.prepare(`
-      SELECT u.id, u.username, u.email, u.role, u.organization_name, u.logo_url, u.is_active, u.created_at, u.updated_at
+      SELECT u.id, u.username, u.email, u.role, u.organization_name, u.logo_url, u.language, u.is_active, u.created_at, u.updated_at
       FROM users u
       WHERE u.parent_id = ?
       ORDER BY u.created_at DESC
@@ -177,12 +180,13 @@ export function getAllUsers(caller) {
     ...u,
     organization_name: u.organization_name || '',
     logo_url: u.logo_url || '',
+    language: u.language || 'en',
     is_active: Boolean(u.is_active),
     domains: domainsStmt.all(u.id).map(r => r.domain)
   }));
 }
 
-export function createUser({ email, username, password, role, organization_name = '', logo_url = '', parentId = null, domains = [] }) {
+export function createUser({ email, username, password, role, organization_name = '', logo_url = '', language = 'en', parentId = null, domains = [] }) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const salt = bcrypt.genSaltSync(12);
@@ -194,10 +198,11 @@ export function createUser({ email, username, password, role, organization_name 
     : (cleanEmail ? cleanEmail.split('@')[0] : 'user');
   const cleanOrg = (organization_name || '').trim();
   const cleanLogo = (logo_url || '').trim();
+  const cleanLang = (language && ['en', 'es'].includes(language.toLowerCase())) ? language.toLowerCase() : 'en';
 
   const insertUser = db.prepare(`
-    INSERT INTO users (id, username, email, password_hash, role, organization_name, logo_url, parent_id, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    INSERT INTO users (id, username, email, password_hash, role, organization_name, logo_url, language, parent_id, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `);
 
   const insertDomain = db.prepare(`
@@ -205,7 +210,7 @@ export function createUser({ email, username, password, role, organization_name 
   `);
 
   const tx = db.transaction(() => {
-    insertUser.run(id, cleanUsername, cleanEmail, passwordHash, role, cleanOrg, cleanLogo, parentId, now, now);
+    insertUser.run(id, cleanUsername, cleanEmail, passwordHash, role, cleanOrg, cleanLogo, cleanLang, parentId, now, now);
     if (Array.isArray(domains)) {
       for (const d of domains) {
         if (d && typeof d === 'string' && d.trim()) {
@@ -219,7 +224,7 @@ export function createUser({ email, username, password, role, organization_name 
   return getUserById(id);
 }
 
-export function updateUser(id, { email, username, password, role, organization_name, logo_url, isActive, domains }) {
+export function updateUser(id, { email, username, password, role, organization_name, logo_url, language, isActive, domains }) {
   const existing = getUserById(id);
   if (!existing) return null;
 
@@ -236,13 +241,14 @@ export function updateUser(id, { email, username, password, role, organization_n
     const newUsername = username !== undefined ? (username ? username.trim() : existing.username) : existing.username;
     const newOrg = organization_name !== undefined ? (organization_name ? organization_name.trim() : '') : existing.organization_name;
     const newLogo = logo_url !== undefined ? (logo_url ? logo_url.trim() : '') : existing.logo_url;
+    const newLang = language !== undefined && ['en', 'es'].includes(language.toLowerCase()) ? language.toLowerCase() : (existing.language || 'en');
     const newIsActive = isActive !== undefined ? (isActive ? 1 : 0) : existing.is_active;
 
     db.prepare(`
       UPDATE users
-      SET username = ?, email = ?, password_hash = ?, role = ?, organization_name = ?, logo_url = ?, is_active = ?, updated_at = ?
+      SET username = ?, email = ?, password_hash = ?, role = ?, organization_name = ?, logo_url = ?, language = ?, is_active = ?, updated_at = ?
       WHERE id = ?
-    `).run(newUsername, newEmail, passwordHash, newRole, newOrg, newLogo, newIsActive, now, id);
+    `).run(newUsername, newEmail, passwordHash, newRole, newOrg, newLogo, newLang, newIsActive, now, id);
 
     if (Array.isArray(domains)) {
       db.prepare('DELETE FROM user_domains WHERE user_id = ?').run(id);
@@ -259,7 +265,7 @@ export function updateUser(id, { email, username, password, role, organization_n
   return getUserById(id);
 }
 
-export function updateUserProfile(id, { username, organization_name, logo_url }) {
+export function updateUserProfile(id, { username, organization_name, logo_url, language }) {
   const existing = getUserById(id);
   if (!existing) return null;
 
@@ -267,12 +273,13 @@ export function updateUserProfile(id, { username, organization_name, logo_url })
   const newUsername = username !== undefined && username.trim() ? username.trim() : existing.username;
   const newOrg = organization_name !== undefined ? organization_name.trim() : (existing.organization_name || '');
   const newLogo = logo_url !== undefined ? logo_url.trim() : (existing.logo_url || '');
+  const newLang = language !== undefined && ['en', 'es'].includes(language.toLowerCase()) ? language.toLowerCase() : (existing.language || 'en');
 
   db.prepare(`
     UPDATE users
-    SET username = ?, organization_name = ?, logo_url = ?, updated_at = ?
+    SET username = ?, organization_name = ?, logo_url = ?, language = ?, updated_at = ?
     WHERE id = ?
-  `).run(newUsername, newOrg, newLogo, now, id);
+  `).run(newUsername, newOrg, newLogo, newLang, now, id);
 
   return getUserById(id);
 }

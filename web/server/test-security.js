@@ -82,7 +82,7 @@ async function runTests() {
     });
     const { generateToken } = await import('./auth.js');
     const db = (await import('./db.js')).default;
-    const adminUser = db.getUserByUsername('admin');
+    const adminUser = db.getUserByEmail('admin@dmarcsentinel.local') || db.getUserByUsername('admin_lead') || db.getUserByUsername('admin') || db.getUserByUsername('amr');
     const testAdminToken = generateToken(adminUser);
 
     const ssrfPayload1 = await fetch(`${BASE}/api/domain-health?domain=127.0.0.1:9200`, {

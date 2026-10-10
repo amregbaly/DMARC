@@ -1,8 +1,12 @@
 import React from 'react';
 import { ShieldAlert, AlertTriangle, ShieldCheck, Radio, Skull, MapPin, Network } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function ThreatIntelligence({ threats }) {
+  const { t, language } = useLanguage();
   if (!threats) return null;
+
+  const isEs = language === 'es';
 
   const {
     containmentRate = 100,
@@ -22,10 +26,10 @@ export default function ThreatIntelligence({ threats }) {
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-rose-400" />
-            Security Operations (SOC) & Threat Intelligence
+            {t('threats.title', 'Security Operations (SOC) & Threat Intelligence')}
           </h2>
           <p className="text-xs text-slate-400">
-            Real-time feed of unaligned senders, phishing attempts, spoofing suspects, and policy enforcement actions.
+            {t('threats.subtitle', 'Real-time feed of unaligned senders, phishing attempts, spoofing suspects, and policy enforcement actions.')}
           </p>
         </div>
       </div>
@@ -35,7 +39,9 @@ export default function ThreatIntelligence({ threats }) {
         {/* Containment Rate Card */}
         <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400">Attack Containment Rate</span>
+            <span className="text-xs font-semibold text-slate-400">
+              {isEs ? 'Tasa de Contención de Amenazas' : 'Attack Containment Rate'}
+            </span>
             <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
             </div>
@@ -45,7 +51,9 @@ export default function ThreatIntelligence({ threats }) {
               {containmentRate}%
             </div>
             <p className="text-xs text-slate-400">
-              {containedMessages.toLocaleString()} of {totalThreatMessages.toLocaleString()} spoofing attempts were quarantined or rejected by receiving mail servers.
+              {isEs
+                ? `${containedMessages.toLocaleString()} de ${totalThreatMessages.toLocaleString()} intentos de suplantación fueron puestos en cuarentena o rechazados por los servidores de correo.`
+                : `${containedMessages.toLocaleString()} of ${totalThreatMessages.toLocaleString()} spoofing attempts were quarantined or rejected by receiving mail servers.`}
             </p>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-2 mt-4 overflow-hidden">
@@ -60,14 +68,16 @@ export default function ThreatIntelligence({ threats }) {
         <div className="glass-panel rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <MapPin className="w-4 h-4 text-rose-400" />
-            <h3 className="text-xs font-semibold text-slate-300">Top Attack Origins (Geo)</h3>
+            <h3 className="text-xs font-semibold text-slate-300">
+              {isEs ? 'Principales Orígenes de Ataque (Geo)' : 'Top Attack Origins (Geo)'}
+            </h3>
           </div>
           <div className="space-y-2">
             {threatCountries.slice(0, 5).map((tc, idx) => (
               <div key={idx} className="flex items-center justify-between text-xs">
                 <span className="font-mono text-slate-300 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                  {tc.country || 'Unknown'}
+                  {tc.country || (isEs ? 'Desconocido' : 'Unknown')}
                 </span>
                 <span className="font-mono text-rose-400 font-semibold">
                   {tc.count.toLocaleString()} msgs
@@ -81,7 +91,9 @@ export default function ThreatIntelligence({ threats }) {
         <div className="glass-panel rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Network className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs font-semibold text-slate-300">Top Threat Networks (ASNs)</h3>
+            <h3 className="text-xs font-semibold text-slate-300">
+              {isEs ? 'Redes de Amenazas Principales (ASNs)' : 'Top Threat Networks (ASNs)'}
+            </h3>
           </div>
           <div className="space-y-2">
             {threatAsns.slice(0, 5).map((ta, idx) => (
@@ -104,11 +116,13 @@ export default function ThreatIntelligence({ threats }) {
           <div className="flex items-center gap-2">
             <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
             <h3 className="text-sm font-semibold text-slate-200">
-              Live Threat Feed: Unaligned & Spoofed Traffic
+              {isEs ? 'Tráfico No Alineado y Suplantado (SOC Feed)' : 'Live Threat Feed: Unaligned & Spoofed Traffic'}
             </h3>
           </div>
           <span className="text-[11px] font-mono text-slate-400">
-            Showing latest {feed.length} security events
+            {isEs
+              ? `Mostrando los últimos ${feed.length} eventos de seguridad`
+              : `Showing latest ${feed.length} security events`}
           </span>
         </div>
 
@@ -116,13 +130,13 @@ export default function ThreatIntelligence({ threats }) {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-900/60 border-b border-slate-800 text-slate-400 font-medium">
               <tr>
-                <th className="px-6 py-3">Timestamp</th>
-                <th className="px-6 py-3">Attacker IP & Host</th>
-                <th className="px-6 py-3">Target Domain</th>
+                <th className="px-6 py-3">{isEs ? 'Fecha / Hora' : 'Timestamp'}</th>
+                <th className="px-6 py-3">{isEs ? 'IP Remitente / Host' : 'Attacker IP & Host'}</th>
+                <th className="px-6 py-3">{isEs ? 'Dominio Objetivo' : 'Target Domain'}</th>
                 <th className="px-6 py-3">Envelope From</th>
-                <th className="px-6 py-3">SPF / DKIM Status</th>
-                <th className="px-6 py-3">Volume</th>
-                <th className="px-6 py-3">Enforcement</th>
+                <th className="px-6 py-3">{isEs ? 'Estado SPF / DKIM' : 'SPF / DKIM Status'}</th>
+                <th className="px-6 py-3">{isEs ? 'Volumen' : 'Volume'}</th>
+                <th className="px-6 py-3">{isEs ? 'Aplicación' : 'Enforcement'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-mono">
@@ -130,7 +144,9 @@ export default function ThreatIntelligence({ threats }) {
                 <tr>
                   <td colSpan="7" className="px-6 py-8 text-center text-slate-400">
                     <ShieldCheck className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-                    No threat events or unaligned traffic detected in this timeframe.
+                    {isEs
+                      ? 'No se detectaron eventos de amenaza ni tráfico suplantado en este período.'
+                      : 'No threat events or unaligned traffic detected in this timeframe.'}
                   </td>
                 </tr>
               ) : (
@@ -144,7 +160,7 @@ export default function ThreatIntelligence({ threats }) {
                       <td className="px-6 py-3">
                         <div className="font-semibold text-rose-400">{event.ip}</div>
                         <div className="text-[10px] text-slate-400 font-sans truncate max-w-xs">
-                          {event.reverseDns || 'No PTR record'} ({event.country})
+                          {event.reverseDns || (isEs ? 'Sin registro PTR' : 'No PTR record')} ({event.country})
                         </div>
                       </td>
                       <td className="px-6 py-3 text-cyan-300 font-medium">

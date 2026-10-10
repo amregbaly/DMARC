@@ -1,7 +1,9 @@
 import React from 'react';
 import { Mail, CheckCircle2, XCircle, ShieldAlert, Globe, Radio } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function KPIGrid({ overview }) {
+  const { t, language } = useLanguage();
   if (!overview) return null;
 
   const {
@@ -30,22 +32,28 @@ export default function KPIGrid({ overview }) {
       ? 'bg-amber-500/10 border-amber-500/20'
       : 'bg-rose-500/10 border-rose-500/20';
 
+  const isEs = language === 'es';
+
   const cards = [
     {
       id: 'kpi-total-emails',
-      title: 'Total Messages',
+      title: t('kpi.totalMessages', 'Total Messages'),
       value: totalEmails.toLocaleString(),
-      subtext: `${passedEmails.toLocaleString()} passed auth`,
+      subtext: isEs
+        ? `${passedEmails.toLocaleString()} autenticados`
+        : `${passedEmails.toLocaleString()} passed auth`,
       icon: Mail,
       iconColor: 'text-cyan-400',
       iconBg: 'bg-cyan-500/10 border-cyan-500/20',
-      trend: '100% evaluated'
+      trend: isEs ? '100% evaluado' : '100% evaluated'
     },
     {
       id: 'kpi-pass-rate',
-      title: 'DMARC Pass Rate',
+      title: t('kpi.passRate', 'DMARC Pass Rate'),
       value: `${passRate}%`,
-      subtext: `${failedEmails.toLocaleString()} failed DMARC`,
+      subtext: isEs
+        ? `${failedEmails.toLocaleString()} fallaron DMARC`
+        : `${failedEmails.toLocaleString()} failed DMARC`,
       icon: CheckCircle2,
       iconColor: passRateColor,
       iconBg: passRateBg,
@@ -53,39 +61,44 @@ export default function KPIGrid({ overview }) {
     },
     {
       id: 'kpi-failures',
-      title: 'DMARC Failures',
+      title: isEs ? 'Fallos de DMARC' : 'DMARC Failures',
       value: failedEmails.toLocaleString(),
-      subtext: totalEmails > 0 ? `${((failedEmails / totalEmails) * 100).toFixed(1)}% failure rate` : '0%',
+      subtext:
+        totalEmails > 0
+          ? `${((failedEmails / totalEmails) * 100).toFixed(1)}% ${isEs ? 'tasa de fallo' : 'failure rate'}`
+          : '0%',
       icon: XCircle,
       iconColor: 'text-rose-400',
       iconBg: 'bg-rose-500/10 border-rose-500/20',
-      trend: failedEmails > 0 ? 'Requires investigation' : 'Zero failures'
+      trend: failedEmails > 0 ? (isEs ? 'Requiere análisis' : 'Requires investigation') : (isEs ? 'Cero fallos' : 'Zero failures')
     },
     {
       id: 'kpi-affected',
-      title: 'Contained & Enforced',
+      title: isEs ? 'Contenidos y Aplicados' : 'Contained & Enforced',
       value: affectedEmails.toLocaleString(),
-      subtext: `${quarantined} quarantined, ${rejected} rejected`,
+      subtext: isEs
+        ? `${quarantined} en cuarentena, ${rejected} rechazados`
+        : `${quarantined} quarantined, ${rejected} rejected`,
       icon: ShieldAlert,
       iconColor: 'text-amber-400',
       iconBg: 'bg-amber-500/10 border-amber-500/20',
-      trend: 'Enforcement active'
+      trend: isEs ? 'Aplicación activa' : 'Enforcement active'
     },
     {
       id: 'kpi-domains',
-      title: 'Monitored Domains',
+      title: isEs ? 'Dominios Monitoreados' : 'Monitored Domains',
       value: domainsMonitored.toLocaleString(),
-      subtext: 'Active SPF/DKIM policies',
+      subtext: isEs ? 'Políticas activas SPF/DKIM' : 'Active SPF/DKIM policies',
       icon: Globe,
       iconColor: 'text-indigo-400',
       iconBg: 'bg-indigo-500/10 border-indigo-500/20',
-      trend: 'Verified senders'
+      trend: isEs ? 'Remitentes verificados' : 'Verified senders'
     },
     {
       id: 'kpi-unique-ips',
-      title: 'Unique Sending IPs',
+      title: isEs ? 'IPs Remitentes Únicas' : 'Unique Sending IPs',
       value: uniqueIps.toLocaleString(),
-      subtext: 'Global source origins',
+      subtext: isEs ? 'Orígenes globales de envío' : 'Global source origins',
       icon: Radio,
       iconColor: 'text-teal-400',
       iconBg: 'bg-teal-500/10 border-teal-500/20',
