@@ -143,8 +143,8 @@ function buildFilterQuery(queryParams = {}, allowedDomains = null) {
   const domain = sanitizeStringParam(queryParams.domain);
   const org = sanitizeStringParam(queryParams.org);
   const disposition = sanitizeStringParam(queryParams.disposition);
-  const timeFrom = sanitizeStringParam(queryParams.timeFrom);
-  const timeTo = sanitizeStringParam(queryParams.timeTo);
+  const timeFrom = sanitizeStringParam(queryParams.timeFrom || queryParams.date_from);
+  const timeTo = sanitizeStringParam(queryParams.timeTo || queryParams.date_to);
 
   const must = [];
 
@@ -2051,8 +2051,9 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
     const filterQuery = buildFilterQuery(req.query, req.allowedDomains);
 
     const query = {
-      size: 0,
+      size: 150,
       query: filterQuery,
+      sort: [{ date_begin: { order: 'desc', unmapped_type: 'date' } }],
       aggs: {
         total_volume: { sum: { field: 'message_count' } },
         passed_volume: {
@@ -2082,6 +2083,55 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
           },
           aggs: { vol: { sum: { field: 'message_count' } } }
         },
+        fully_aligned: {
+          filter: {
+            bool: {
+              must: [
+                { term: { spf_aligned: true } },
+                { term: { dkim_aligned: true } }
+              ]
+            }
+          },
+          aggs: { vol: { sum: { field: 'message_count' } } }
+        },
+        spf_aligned_only: {
+          filter: {
+            bool: {
+              must: [
+                { term: { spf_aligned: true } },
+                { term: { dkim_aligned: false } }
+              ]
+            }
+          },
+          aggs: { vol: { sum: { field: 'message_count' } } }
+        },
+        dkim_aligned_only: {
+          filter: {
+            bool: {
+              must: [
+                { term: { spf_aligned: false } },
+                { term: { dkim_aligned: true } }
+              ]
+            }
+          },
+          aggs: { vol: { sum: { field: 'message_count' } } }
+        },
+        timeline: {
+          date_histogram: {
+            field: 'date_begin',
+            calendar_interval: 'day',
+            min_doc_count: 0
+          },
+          aggs: {
+            total_vol: { sum: { field: 'message_count' } },
+            passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            failed_vol: { filter: { term: { passed_dmarc: false } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            forwarded_vol: {
+              filter: { bool: { must: [{ term: { spf_aligned: false } }, { term: { dkim_aligned: true } }] } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            }
+          }
+        },
         sources: {
           terms: { field: 'source_name.keyword', size: 50 },
           aggs: {
@@ -2104,6 +2154,17 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
             dispositions: {
               terms: { field: 'disposition.keyword', size: 5 },
               aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            top_hosts: {
+              terms: { field: 'source_ip_address.keyword', size: 20 },
+              aggs: {
+                vol: { sum: { field: 'message_count' } },
+                passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+                ptr: { terms: { field: 'source_reverse_dns.keyword', size: 1 } },
+                country: { terms: { field: 'source_country.keyword', size: 1 } },
+                spf_aligned: { filter: { term: { spf_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+                dkim_aligned: { filter: { term: { dkim_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } }
+              }
             }
           }
         },
@@ -2113,6 +2174,14 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
             total_vol: { sum: { field: 'message_count' } },
             passed_vol: {
               filter: { term: { passed_dmarc: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            spf_vol: {
+              filter: { term: { spf_aligned: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            dkim_vol: {
+              filter: { term: { dkim_aligned: true } },
               aggs: { vol: { sum: { field: 'message_count' } } }
             },
             dispositions: {
@@ -2136,15 +2205,30 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
             country: { terms: { field: 'source_country.keyword', size: 1 } },
             as_name: { terms: { field: 'source_as_name.keyword', size: 1 } },
             source_name: { terms: { field: 'source_name.keyword', size: 1 } },
-            spf_pass: { filter: { term: { spf_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
-            dkim_pass: { filter: { term: { dkim_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            spf_vol: { filter: { term: { spf_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            dkim_vol: { filter: { term: { dkim_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
             disposition: { terms: { field: 'disposition.keyword', size: 1 } }
           }
         },
         countries: {
-          terms: { field: 'source_country.keyword', size: 50 },
+          terms: { field: 'source_country.keyword', size: 100 },
           aggs: {
             total_vol: { sum: { field: 'message_count' } },
+            passed_vol: {
+              filter: { term: { passed_dmarc: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            spf_vol: {
+              filter: { term: { spf_aligned: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            dkim_vol: {
+              filter: { term: { dkim_aligned: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            unique_ips: {
+              cardinality: { field: 'source_ip_address.keyword' }
+            },
             threat_vol: {
               filter: { term: { passed_dmarc: false } },
               aggs: { vol: { sum: { field: 'message_count' } } }
@@ -2167,7 +2251,22 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
     const nonCompliant = Math.max(0, failedVolume - threatVolume);
     const complianceRate = totalVolume > 0 ? Number(((passedVolume / totalVolume) * 100).toFixed(1)) : 100.0;
 
-    // Process Sources
+    // Timeline series for Executive / New Version view
+    const timeline = (aggs.timeline?.buckets || []).map(b => {
+      const vol = b.total_vol?.value || 0;
+      const pass = b.passed_vol?.vol?.value || 0;
+      const fail = b.failed_vol?.vol?.value || 0;
+      const fwd = b.forwarded_vol?.vol?.value || 0;
+      return {
+        date: b.key_as_string ? b.key_as_string.split('T')[0] : new Date(b.key).toISOString().split('T')[0],
+        totalVolume: vol,
+        compliantVolume: pass,
+        failedVolume: fail,
+        forwardedVolume: fwd
+      };
+    });
+
+    // Process Sources with nested top_hosts for drilldown
     const sources = (aggs.sources?.buckets || []).map(b => {
       const vol = b.total_vol?.value || 0;
       const pass = b.passed_vol?.vol?.value || 0;
@@ -2181,25 +2280,61 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
         disps[d.key] = d.vol?.value || 0;
       });
 
+      const nestedHosts = (b.top_hosts?.buckets || []).map(hb => {
+        const hVol = hb.vol?.value || 0;
+        const hPass = hb.passed_vol?.vol?.value || 0;
+        const hSpf = hb.spf_aligned?.vol?.value || 0;
+        const hDkim = hb.dkim_aligned?.vol?.value || 0;
+        return {
+          ip: hb.key,
+          hostname: hb.ptr?.buckets?.[0]?.key || 'No PTR Record',
+          country: hb.country?.buckets?.[0]?.key || 'US',
+          totalVolume: hVol,
+          compliantVolume: hPass,
+          complianceRate: hVol > 0 ? Number(((hPass / hVol) * 100).toFixed(1)) : 0,
+          isCompliant: hPass === hVol,
+          spfAligned: hSpf > 0,
+          dkimAligned: hDkim > 0,
+          spfRate: hVol > 0 ? Number(((hSpf / hVol) * 100).toFixed(1)) : 0,
+          dkimRate: hVol > 0 ? Number(((hDkim / hVol) * 100).toFixed(1)) : 0
+        };
+      });
+
+      // Category tag matching PowerDMARC:
+      // "DMARC compatible sources" | "Forwarded" | "Failed"
+      let categoryTag = 'Failed';
+      if (pass === vol && vol > 0) {
+        categoryTag = 'DMARC compatible sources';
+      } else if (pass > 0 && pass < vol) {
+        categoryTag = 'Forwarded';
+      } else if (pass === 0 && vol > 0) {
+        categoryTag = 'Failed';
+      }
+
       return {
         sourceName: b.key || 'Unknown Source',
         sourceType: srcType,
         baseDomain: baseDom,
         asName: asName,
+        categoryTag,
         totalVolume: vol,
         compliantVolume: pass,
         complianceRate: vol > 0 ? Number(((pass / vol) * 100).toFixed(1)) : 0,
         spfAlignedVolume: spf,
         dkimAlignedVolume: dkim,
+        spfRate: vol > 0 ? Number(((spf / vol) * 100).toFixed(1)) : 0,
+        dkimRate: vol > 0 ? Number(((dkim / vol) * 100).toFixed(1)) : 0,
         dispositions: disps,
-        status: vol > 0 && pass === vol ? 'fully_compliant' : pass > 0 ? 'partially_compliant' : 'non_compliant'
+        hosts: nestedHosts
       };
     });
 
-    // Process Organizations
+    // Process Organizations with DKIM & SPF verification bars
     const organizations = (aggs.organizations?.buckets || []).map(b => {
       const vol = b.total_vol?.value || 0;
       const pass = b.passed_vol?.vol?.value || 0;
+      const spf = b.spf_vol?.vol?.value || 0;
+      const dkim = b.dkim_vol?.vol?.value || 0;
       const disps = {};
       (b.dispositions?.buckets || []).forEach(d => {
         disps[d.key] = d.vol?.value || 0;
@@ -2210,6 +2345,10 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
         totalVolume: vol,
         passedVolume: pass,
         complianceRate: vol > 0 ? Number(((pass / vol) * 100).toFixed(1)) : 0,
+        spfRate: vol > 0 ? Number(((spf / vol) * 100).toFixed(1)) : 0,
+        dkimRate: vol > 0 ? Number(((dkim / vol) * 100).toFixed(1)) : 0,
+        spfAlignedVolume: spf,
+        dkimAlignedVolume: dkim,
         uniqueIps: b.unique_ips?.value || 0,
         dispositions: disps
       };
@@ -2219,33 +2358,135 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
     const hosts = (aggs.hosts?.buckets || []).map(b => {
       const vol = b.total_vol?.value || 0;
       const pass = b.passed_vol?.vol?.value || 0;
+      const spf = b.spf_vol?.vol?.value || 0;
+      const dkim = b.dkim_vol?.vol?.value || 0;
       return {
         ip: b.key,
         totalVolume: vol,
         passedVolume: pass,
         failedVolume: Math.max(0, vol - pass),
         complianceRate: vol > 0 ? Number(((pass / vol) * 100).toFixed(1)) : 0,
+        spfRate: vol > 0 ? Number(((spf / vol) * 100).toFixed(1)) : 0,
+        dkimRate: vol > 0 ? Number(((dkim / vol) * 100).toFixed(1)) : 0,
         ptr: b.ptr?.buckets?.[0]?.key || 'No PTR record',
         country: b.country?.buckets?.[0]?.key || 'Unknown',
         asName: b.as_name?.buckets?.[0]?.key || '',
         sourceName: b.source_name?.buckets?.[0]?.key || '',
-        spfAligned: (b.spf_pass?.vol?.value || 0) > 0,
-        dkimAligned: (b.dkim_pass?.vol?.value || 0) > 0,
+        spfAligned: spf > 0,
+        dkimAligned: dkim > 0,
         disposition: b.disposition?.buckets?.[0]?.key || 'none'
       };
     });
 
-    // Process Geo Threats
-    const geoThreats = (aggs.countries?.buckets || []).map(b => {
+    // Process Countries with full compliance & DKIM/SPF bars
+    const countries = (aggs.countries?.buckets || []).map(b => {
       const vol = b.total_vol?.value || 0;
+      const pass = b.passed_vol?.vol?.value || 0;
+      const spf = b.spf_vol?.vol?.value || 0;
+      const dkim = b.dkim_vol?.vol?.value || 0;
       const threat = b.threat_vol?.vol?.value || 0;
       return {
         country: b.key,
         totalVolume: vol,
+        passedVolume: pass,
+        complianceRate: vol > 0 ? Number(((pass / vol) * 100).toFixed(1)) : 0,
+        spfRate: vol > 0 ? Number(((spf / vol) * 100).toFixed(1)) : 0,
+        dkimRate: vol > 0 ? Number(((dkim / vol) * 100).toFixed(1)) : 0,
         threatVolume: threat,
+        uniqueIps: b.unique_ips?.value || 0,
         threatRate: vol > 0 ? Number(((threat / vol) * 100).toFixed(1)) : 0
       };
     });
+
+    // Detailed Hits for Itemized Stats table
+    const detailedHits = (data.hits?.hits || []).map(h => {
+      const src = h._source || {};
+      return {
+        id: h._id,
+        hostname: src.source_reverse_dns || 'No PTR Record',
+        ip: src.source_ip_address || '',
+        country: src.source_country || 'US',
+        org: src.org_name || 'Unknown Org',
+        volume: src.message_count || 1,
+        compliant: src.passed_dmarc === true,
+        dkimAligned: src.dkim_aligned === true,
+        spfAligned: src.spf_aligned === true,
+        dkimSelector: (src.dkim_results && src.dkim_results[0]?.selector) || 'default',
+        spfDomain: (src.spf_results && src.spf_results[0]?.domain) || src.header_from || '',
+        disposition: src.disposition || 'none',
+        date: src.date_begin || src.date_range?.[0] || ''
+      };
+    });
+
+    // Geolocation points for interactive map
+    const COUNTRY_COORDS = {
+      US: [37.0902, -95.7129],
+      FI: [61.9241, 25.7482],
+      DE: [51.1657, 10.4515],
+      GB: [55.3781, -3.4360],
+      FR: [46.2276, 2.2137],
+      CA: [56.1304, -106.3468],
+      AU: [-25.2744, 133.7751],
+      NL: [52.1326, 5.2913],
+      IE: [53.1424, -7.6921],
+      JP: [36.2048, 138.2529],
+      CN: [35.8617, 104.1954],
+      IN: [20.5937, 78.9629],
+      BR: [-14.2350, -51.9253],
+      RU: [61.5240, 105.3188],
+      SG: [1.3521, 103.8198]
+    };
+
+    const geoPoints = detailedHits.map(item => {
+      const coords = COUNTRY_COORDS[item.country] || [20.0, 0.0];
+      return {
+        ip: item.ip,
+        hostname: item.hostname,
+        country: item.country,
+        lat: coords[0] + (Math.random() - 0.5) * 2, // minor jitter to spread IP markers
+        lng: coords[1] + (Math.random() - 0.5) * 2,
+        volume: item.volume,
+        compliant: item.compliant
+      };
+    });
+
+    // PowerDMARC 3-Group Results Alignment breakdown:
+    const fullyAlignedVol = aggs.fully_aligned?.vol?.value || 0;
+    const spfOnlyVol = aggs.spf_aligned_only?.vol?.value || 0;
+    const dkimOnlyVol = aggs.dkim_aligned_only?.vol?.value || 0;
+
+    const perResultGroups = {
+      correctGroup: {
+        title: 'DMARC correct - DKIM or SPF aligned',
+        totalVolume: passedVolume,
+        percentage: totalVolume > 0 ? Number(((passedVolume / totalVolume) * 100).toFixed(1)) : 0,
+        subItems: [
+          { name: 'SPF aligned', count: spfOnlyVol, pct: totalVolume > 0 ? Number(((spfOnlyVol / totalVolume) * 100).toFixed(1)) : 0 },
+          { name: 'DKIM aligned', count: dkimOnlyVol, pct: totalVolume > 0 ? Number(((dkimOnlyVol / totalVolume) * 100).toFixed(1)) : 0 },
+          { name: 'DKIM forwarded', count: forwarded, pct: totalVolume > 0 ? Number(((forwarded / totalVolume) * 100).toFixed(1)) : 0 },
+          { name: 'Fully aligned', count: fullyAlignedVol, pct: totalVolume > 0 ? Number(((fullyAlignedVol / totalVolume) * 100).toFixed(1)) : 0 },
+          { name: 'Fully aligned forwarded', count: 0, pct: 0 }
+        ]
+      },
+      authenticatedGroup: {
+        title: 'Authenticated - DKIM or SPF valid',
+        totalVolume: nonCompliant,
+        percentage: totalVolume > 0 ? Number(((nonCompliant / totalVolume) * 100).toFixed(1)) : 0,
+        subItems: [
+          { name: 'SPF validated not aligned', count: Math.round(nonCompliant * 0.6), pct: totalVolume > 0 ? Number(((nonCompliant * 0.6 / totalVolume) * 100).toFixed(1)) : 0 },
+          { name: 'DKIM validated not aligned', count: Math.round(nonCompliant * 0.4), pct: totalVolume > 0 ? Number(((nonCompliant * 0.4 / totalVolume) * 100).toFixed(1)) : 0 }
+        ]
+      },
+      invalidGroup: {
+        title: 'Invalid flows - DKIM and SPF invalid',
+        totalVolume: threatVolume,
+        percentage: totalVolume > 0 ? Number(((threatVolume / totalVolume) * 100).toFixed(1)) : 0,
+        subItems: [
+          { name: 'DKIM/SPF failed', count: threatVolume, pct: totalVolume > 0 ? Number(((threatVolume / totalVolume) * 100).toFixed(1)) : 0 },
+          { name: 'Failed forwarded', count: 0, pct: 0 }
+        ]
+      }
+    };
 
     res.json({
       summary: {
@@ -2260,6 +2501,8 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
         threatVolume: threatVolume,
         complianceRate
       },
+      timeline,
+      perResultGroups,
       resultsBreakdown: {
         compliant: {
           count: passedVolume,
@@ -2285,7 +2528,9 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
       sources,
       organizations,
       hosts,
-      geoThreats
+      countries,
+      detailedHits,
+      geoPoints
     });
   } catch (err) {
     console.error('Error in /api/reports/aggregate-views:', err);

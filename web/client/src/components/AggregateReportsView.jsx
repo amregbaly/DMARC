@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Server,
-  Network,
   PieChart,
   Building2,
+  Network,
   Globe2,
+  Flag,
+  LayoutDashboard,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -20,11 +22,110 @@ import {
   FileText,
   Radio,
   Check,
-  Download
+  ChevronDown,
+  ChevronRight,
+  MapPin,
+  Sparkles
 } from 'lucide-react';
 import { fetchAggregateViews } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 
+// Helper for country flags
+function getCountryFlag(countryCode) {
+  if (!countryCode || countryCode === 'Unknown' || countryCode === '—') return '🌐';
+  const code = countryCode.toUpperCase();
+  if (code.length !== 2) return '🌐';
+  const offset = 127397;
+  return String.fromCodePoint(...[...code].map((c) => c.charCodeAt(0) + offset));
+}
+
+// -------------------------------------------------------------
+// DonutGauge: Circular compliance gauge matching PowerDMARC
+// -------------------------------------------------------------
+export function DonutGauge({ rate = 100, size = 52, strokeWidth = 5, label = null }) {
+  const cleanRate = Math.min(100, Math.max(0, Number(rate) || 0));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (cleanRate / 100) * circumference;
+
+  let color = '#10b981'; // emerald
+  if (cleanRate < 70) color = '#ef4444'; // red
+  else if (cleanRate < 95) color = '#f59e0b'; // amber
+
+  return (
+    <div className="flex flex-col items-center justify-center inline-flex">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg className="w-full h-full -rotate-90 transform" viewBox={`0 0 ${size} ${size}`}>
+          {/* Background circle */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="#1e293b"
+            strokeWidth={strokeWidth}
+            fill="transparent"
+          />
+          {/* Progress circle */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="transparent"
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center flex-col">
+          <span className="text-[11px] font-black text-white font-mono leading-none">
+            {Math.round(cleanRate)}%
+          </span>
+        </div>
+      </div>
+      {label && <span className="text-[10px] text-slate-400 mt-1 font-medium">{label}</span>}
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// SplitProgressBar: Stacked Verification Bar (DKIM / SPF)
+// -------------------------------------------------------------
+export function SplitProgressBar({ title, passRate = 100, totalVolume = 0, passedVolume = 0 }) {
+  const rate = Math.min(100, Math.max(0, Number(passRate) || 0));
+  const failRate = Number((100 - rate).toFixed(1));
+
+  return (
+    <div className="w-full min-w-[130px] space-y-1">
+      <div className="flex items-center justify-between text-[10px]">
+        <span className="text-slate-400 font-medium">{title}</span>
+        <span className="font-mono font-bold text-white">{rate}%</span>
+      </div>
+      <div className="w-full h-2 rounded-full bg-slate-950 border border-slate-800/80 overflow-hidden flex">
+        <div
+          style={{ width: `${rate}%` }}
+          className="bg-emerald-500 h-full transition-all duration-500"
+          title={`Aligned: ${rate}%`}
+        />
+        <div
+          style={{ width: `${failRate}%` }}
+          className="bg-rose-500/80 h-full transition-all duration-500"
+          title={`Unaligned: ${failRate}%`}
+        />
+      </div>
+      <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
+        <span className="text-emerald-400/90">{rate}% Pass</span>
+        {failRate > 0 && <span className="text-rose-400/90">{failRate}% Fail</span>}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// MAIN COMPONENT: PowerDMARC Aggregate Reports Suite
+// -------------------------------------------------------------
 export default function AggregateReportsView({
   domains = [],
   selectedDomain,
@@ -32,10 +133,17 @@ export default function AggregateReportsView({
   onSwitchToGenerate
 }) {
   const { language, t } = useLanguage();
-  const [subView, setSubView] = useState('sources'); // 'sources' | 'results' | 'orgs' | 'hosts' | 'threats'
+
+  // 8 PowerDMARC subviews:
+  // 'new_version' | 'per_source' | 'per_result' | 'per_org' | 'per_host' | 'detailed' | 'geolocation' | 'per_country'
+  const [subView, setSubView] = useState('new_version');
   const [domainFilter, setDomainFilter] = useState(selectedDomain || 'all');
   const [timePreset, setTimePreset] = useState('30d');
   const [searchQuery, setSearchQuery] = useState('');
+  const [hostnameSearch, setHostnameSearch] = useState('');
+  const [ipSearch, setIpSearch] = useState('');
+  const [sourceCategoryFilter, setSourceCategoryFilter] = useState('all');
+  const [expandedSources, setExpandedSources] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
@@ -83,6 +191,13 @@ export default function AggregateReportsView({
     }
   }
 
+  const toggleSourceExpand = (sourceName) => {
+    setExpandedSources((prev) => ({
+      ...prev,
+      [sourceName]: !prev[sourceName]
+    }));
+  };
+
   const summary = data?.summary || {
     totalVolume: 0,
     passedVolume: 0,
@@ -94,63 +209,112 @@ export default function AggregateReportsView({
     complianceRate: 100
   };
 
-  const results = data?.resultsBreakdown || {
-    compliant: { count: 0, pct: 0 },
-    nonCompliant: { count: 0, pct: 0 },
-    forwarded: { count: 0, pct: 0 },
-    threats: { count: 0, pct: 0 }
-  };
-
   const sources = data?.sources || [];
   const organizations = data?.organizations || [];
   const hosts = data?.hosts || [];
-  const geoThreats = data?.geoThreats || [];
+  const countries = data?.countries || [];
+  const detailedHits = data?.detailedHits || [];
+  const geoPoints = data?.geoPoints || [];
+  const timeline = data?.timeline || [];
+  const perResultGroups = data?.perResultGroups || null;
 
-  // Filtered lists based on search input
-  const filteredSources = sources.filter((s) => {
-    if (!searchQuery) return true;
+  // Filtered Sources based on search & category
+  const filteredSources = useMemo(() => {
+    return sources.filter((s) => {
+      if (sourceCategoryFilter !== 'all' && s.categoryTag !== sourceCategoryFilter) {
+        return false;
+      }
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (s.sourceName && s.sourceName.toLowerCase().includes(q)) ||
+        (s.baseDomain && s.baseDomain.toLowerCase().includes(q)) ||
+        (s.asName && s.asName.toLowerCase().includes(q))
+      );
+    });
+  }, [sources, searchQuery, sourceCategoryFilter]);
+
+  // Source Categories summary counts
+  const sourceStats = useMemo(() => {
+    let dmarcCompatibleCount = 0;
+    let dmarcCompatibleVol = 0;
+    let forwardedCount = 0;
+    let forwardedVol = 0;
+    let failedCount = 0;
+    let failedVol = 0;
+
+    sources.forEach((s) => {
+      if (s.categoryTag === 'DMARC compatible sources') {
+        dmarcCompatibleCount++;
+        dmarcCompatibleVol += s.totalVolume;
+      } else if (s.categoryTag === 'Forwarded') {
+        forwardedCount++;
+        forwardedVol += s.totalVolume;
+      } else {
+        failedCount++;
+        failedVol += s.totalVolume;
+      }
+    });
+
+    return {
+      compatible: { count: dmarcCompatibleCount, volume: dmarcCompatibleVol },
+      forwarded: { count: forwardedCount, volume: forwardedVol },
+      failed: { count: failedCount, volume: failedVol }
+    };
+  }, [sources]);
+
+  // Filtered Orgs
+  const filteredOrgs = useMemo(() => {
+    if (!searchQuery) return organizations;
     const q = searchQuery.toLowerCase();
-    return (
-      (s.sourceName && s.sourceName.toLowerCase().includes(q)) ||
-      (s.baseDomain && s.baseDomain.toLowerCase().includes(q)) ||
-      (s.asName && s.asName.toLowerCase().includes(q))
+    return organizations.filter((o) => o.orgName && o.orgName.toLowerCase().includes(q));
+  }, [organizations, searchQuery]);
+
+  // Filtered Hosts
+  const filteredHosts = useMemo(() => {
+    if (!searchQuery) return hosts;
+    const q = searchQuery.toLowerCase();
+    return hosts.filter(
+      (h) =>
+        (h.ip && h.ip.toLowerCase().includes(q)) ||
+        (h.ptr && h.ptr.toLowerCase().includes(q)) ||
+        (h.country && h.country.toLowerCase().includes(q)) ||
+        (h.asName && h.asName.toLowerCase().includes(q))
     );
-  });
+  }, [hosts, searchQuery]);
 
-  const filteredOrgs = organizations.filter((o) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return o.orgName && o.orgName.toLowerCase().includes(q);
-  });
+  // Filtered Detailed Hits
+  const filteredDetailedHits = useMemo(() => {
+    return detailedHits.filter((item) => {
+      if (hostnameSearch) {
+        const hq = hostnameSearch.toLowerCase();
+        if (!item.hostname || !item.hostname.toLowerCase().includes(hq)) return false;
+      }
+      if (ipSearch) {
+        const iq = ipSearch.toLowerCase();
+        if (!item.ip || !item.ip.toLowerCase().includes(iq)) return false;
+      }
+      return true;
+    });
+  }, [detailedHits, hostnameSearch, ipSearch]);
 
-  const filteredHosts = hosts.filter((h) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      (h.ip && h.ip.toLowerCase().includes(q)) ||
-      (h.ptr && h.ptr.toLowerCase().includes(q)) ||
-      (h.country && h.country.toLowerCase().includes(q)) ||
-      (h.asName && h.asName.toLowerCase().includes(q))
-    );
-  });
-
-  const filteredThreats = geoThreats.filter((g) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return g.country && g.country.toLowerCase().includes(q);
-  });
-
+  // 8 PowerDMARC sub-navigation tabs
   const subNavItems = [
-    { id: 'sources', label: t('reports.viewPerSource', 'Per Sending Source'), icon: Server, count: sources.length },
-    { id: 'results', label: t('reports.viewPerResult', 'Per Result'), icon: PieChart },
-    { id: 'orgs', label: t('reports.viewPerOrg', 'Per Organization'), icon: Building2, count: organizations.length },
-    { id: 'hosts', label: t('reports.viewPerHost', 'Per Host'), icon: Network, count: hosts.length },
-    { id: 'threats', label: t('reports.viewDetailedThreats', 'Detailed & Geo Threats'), icon: Globe2, count: geoThreats.length }
+    { id: 'new_version', label: t('reports.viewNewVersion', 'New Version (Beta)'), icon: LayoutDashboard },
+    { id: 'per_source', label: t('reports.viewPerSource', 'Per Sending Source'), icon: Server, count: sources.length },
+    { id: 'per_result', label: t('reports.viewPerResult', 'Per Result'), icon: PieChart },
+    { id: 'per_org', label: t('reports.viewPerOrg', 'Per Organization'), icon: Building2, count: organizations.length },
+    { id: 'per_host', label: t('reports.viewPerHost', 'Per Host'), icon: Network, count: hosts.length },
+    { id: 'detailed', label: t('reports.viewDetailed', 'Detailed Stats'), icon: Sliders, count: detailedHits.length },
+    { id: 'geolocation', label: t('reports.viewGeolocation', 'Geolocation Report'), icon: Globe2, count: geoPoints.length },
+    { id: 'per_country', label: t('reports.viewPerCountry', 'Per Country'), icon: Flag, count: countries.length }
   ];
 
   return (
     <div className="space-y-6">
-      {/* Top Filter & Action Bar */}
+      {/* ======================================================== */}
+      {/* TOP FILTER & ACTION BAR                                 */}
+      {/* ======================================================== */}
       <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
           {/* Domain Scope */}
@@ -159,7 +323,7 @@ export default function AggregateReportsView({
             <select
               value={domainFilter}
               onChange={(e) => setDomainFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium focus:ring-1 focus:ring-cyan-500"
+              className="bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium focus:ring-1 focus:ring-cyan-500 cursor-pointer"
             >
               <option value="all">{t('filters.allDomains', 'All Permitted Domains')}</option>
               {domains.map((d) => (
@@ -224,61 +388,11 @@ export default function AggregateReportsView({
         </div>
       )}
 
-      {/* Summary KPI Cards (PowerDMARC style) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass-panel p-4 rounded-xl border border-slate-800 bg-slate-900/50">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Volume</span>
-            <Radio className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="text-2xl font-black text-white mt-1">
-            {summary.totalVolume ? summary.totalVolume.toLocaleString() : '0'}
-          </div>
-          <p className="text-[10px] text-slate-500 mt-0.5">Aggregated messages in range</p>
-        </div>
-
-        <div className="glass-panel p-4 rounded-xl border border-slate-800 bg-slate-900/50">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">DMARC Compliance</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-2xl font-black text-emerald-400 mt-1">
-            {summary.complianceRate}%
-          </div>
-          <div className="w-full bg-slate-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
-            <div
-              className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, Math.max(0, summary.complianceRate))}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="glass-panel p-4 rounded-xl border border-slate-800 bg-slate-900/50">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Compliant Aligned</span>
-            <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="text-2xl font-black text-cyan-300 mt-1">
-            {summary.compliantVolume ? summary.compliantVolume.toLocaleString() : '0'}
-          </div>
-          <p className="text-[10px] text-slate-500 mt-0.5">Passing SPF and/or DKIM alignment</p>
-        </div>
-
-        <div className="glass-panel p-4 rounded-xl border border-slate-800 bg-slate-900/50">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Blocked Threats</span>
-            <ShieldAlert className="w-4 h-4 text-red-400" />
-          </div>
-          <div className="text-2xl font-black text-red-400 mt-1">
-            {summary.threatVolume ? summary.threatVolume.toLocaleString() : '0'}
-          </div>
-          <p className="text-[10px] text-slate-500 mt-0.5">Quarantined or rejected spoofing</p>
-        </div>
-      </div>
-
-      {/* 5-Perspective Subview Navigation Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-        <div className="flex flex-wrap items-center gap-2">
+      {/* ======================================================== */}
+      {/* 8 POWERDMARC SUB-TABS NAVIGATION BAR                    */}
+      {/* ======================================================== */}
+      <div className="overflow-x-auto pb-1 border-b border-slate-800">
+        <div className="flex items-center gap-2 min-w-max">
           {subNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = subView === item.id;
@@ -286,9 +400,9 @@ export default function AggregateReportsView({
               <button
                 key={item.id}
                 onClick={() => setSubView(item.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
                   isActive
-                    ? 'bg-slate-800 text-cyan-400 border border-cyan-500/40 shadow-sm'
+                    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/10 text-cyan-400 border border-cyan-500/50 shadow-sm shadow-cyan-500/10'
                     : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-slate-800/80'
                 }`}
               >
@@ -296,8 +410,8 @@ export default function AggregateReportsView({
                 <span>{item.label}</span>
                 {item.count !== undefined && (
                   <span
-                    className={`px-1.5 py-0.2 text-[9px] rounded-full ${
-                      isActive ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-slate-400'
+                    className={`px-1.5 py-0.2 text-[9px] font-mono rounded-full ${
+                      isActive ? 'bg-cyan-500/30 text-cyan-300 font-bold' : 'bg-slate-800 text-slate-400'
                     }`}
                   >
                     {item.count}
@@ -307,155 +421,511 @@ export default function AggregateReportsView({
             );
           })}
         </div>
-
-        {/* Search input for table views */}
-        {subView !== 'results' && (
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search vendors, IPs, domains..."
-              className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-1.5 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
-            />
-          </div>
-        )}
       </div>
 
       {/* ======================================================== */}
-      {/* SUB-VIEW 1: PER SENDING SOURCE */}
+      {/* VIEW 1: NEW VERSION (BETA / EXECUTIVE OVERVIEW)          */}
       {/* ======================================================== */}
-      {subView === 'sources' && (
-        <div className="space-y-4">
+      {subView === 'new_version' && (
+        <div className="space-y-6">
+          {/* Top 4 PowerDMARC Metric KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Total Volume */}
+            <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-lg">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
+                <span>Total Volume</span>
+                <Radio className="w-4 h-4 text-cyan-400" />
+              </div>
+              <div className="text-3xl font-black text-white mt-2 font-mono">
+                {summary.totalVolume ? summary.totalVolume.toLocaleString() : '0'}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Aggregated email messages</p>
+            </div>
+
+            {/* DMARC Compliant % */}
+            <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-slate-900/50 shadow-lg">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
+                <span>DMARC Compliant</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="text-3xl font-black text-emerald-400 mt-2 font-mono">
+                {summary.complianceRate}%
+              </div>
+              <p className="text-[11px] text-emerald-400/80 mt-1">
+                {summary.compliantVolume.toLocaleString()} aligned messages
+              </p>
+            </div>
+
+            {/* Forwarded % */}
+            <div className="glass-panel p-5 rounded-2xl border border-blue-500/30 bg-slate-900/50 shadow-lg">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
+                <span>Forwarded</span>
+                <Network className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="text-3xl font-black text-blue-400 mt-2 font-mono">
+                {summary.totalVolume > 0
+                  ? Number(((summary.forwardedVolume / summary.totalVolume) * 100).toFixed(1))
+                  : 0}
+                %
+              </div>
+              <p className="text-[11px] text-blue-300/80 mt-1">
+                {summary.forwardedVolume.toLocaleString()} indirect relays
+              </p>
+            </div>
+
+            {/* Failed % */}
+            <div className="glass-panel p-5 rounded-2xl border border-rose-500/30 bg-slate-900/50 shadow-lg">
+              <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
+                <span>Failed</span>
+                <ShieldAlert className="w-4 h-4 text-rose-400" />
+              </div>
+              <div className="text-3xl font-black text-rose-400 mt-2 font-mono">
+                {summary.totalVolume > 0
+                  ? Number(((summary.failedVolume / summary.totalVolume) * 100).toFixed(1))
+                  : 0}
+                %
+              </div>
+              <p className="text-[11px] text-rose-400/80 mt-1">
+                {summary.failedVolume.toLocaleString()} unaligned / threats
+              </p>
+            </div>
+          </div>
+
+          {/* Results Overview Chart & Top Sending Sources Donut */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Results Overview Timeline Bar Chart */}
+            <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                    {t('reports.resultsOverview', 'Results Overview')}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Daily authentication delivery breakdown across the selected period.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 text-[11px] font-medium">
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Compliant
+                  </span>
+                  <span className="flex items-center gap-1.5 text-blue-400">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Forwarded
+                  </span>
+                  <span className="flex items-center gap-1.5 text-rose-400">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Failed
+                  </span>
+                </div>
+              </div>
+
+              {/* Interactive Timeline Visualizer */}
+              <div className="h-56 flex items-end gap-2 pt-6 pb-2 px-2 border-b border-slate-800/80 overflow-x-auto">
+                {timeline.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
+                    No timeline telemetry for the chosen window.
+                  </div>
+                ) : (
+                  timeline.map((point, idx) => {
+                    const maxVol = Math.max(...timeline.map((p) => p.totalVolume), 1);
+                    const compHeight = (point.compliantVolume / maxVol) * 100;
+                    const fwdHeight = (point.forwardedVolume / maxVol) * 100;
+                    const failHeight = (point.failedVolume / maxVol) * 100;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex-1 min-w-[28px] h-full flex flex-col justify-end items-center group relative cursor-pointer"
+                      >
+                        {/* Tooltip on hover */}
+                        <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-950 border border-slate-700 p-2 rounded-xl text-[10px] shadow-2xl z-20 whitespace-nowrap">
+                          <span className="font-bold text-white">{point.date}</span>
+                          <span className="text-emerald-400">Compliant: {point.compliantVolume.toLocaleString()}</span>
+                          <span className="text-blue-400">Forwarded: {point.forwardedVolume.toLocaleString()}</span>
+                          <span className="text-rose-400">Failed: {point.failedVolume.toLocaleString()}</span>
+                          <span className="text-slate-400 border-t border-slate-800 pt-0.5 mt-0.5">
+                            Total: {point.totalVolume.toLocaleString()}
+                          </span>
+                        </div>
+
+                        {/* Stacked bar segments */}
+                        <div className="w-4 rounded-t-md overflow-hidden flex flex-col justify-end bg-slate-950">
+                          {failHeight > 0 && (
+                            <div style={{ height: `${failHeight}%` }} className="bg-rose-500 w-full" />
+                          )}
+                          {fwdHeight > 0 && (
+                            <div style={{ height: `${fwdHeight}%` }} className="bg-blue-500 w-full" />
+                          )}
+                          {compHeight > 0 && (
+                            <div style={{ height: `${compHeight}%` }} className="bg-emerald-500 w-full" />
+                          )}
+                        </div>
+                        <span className="text-[9px] text-slate-500 font-mono mt-1 transform -rotate-45 origin-top-left">
+                          {point.date.slice(5)}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Top Sending Sources Donut Summary */}
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl flex flex-col justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <PieChart className="w-4 h-4 text-cyan-400" />
+                  {t('reports.topSendingSources', 'Top Sending Sources')}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Volume distribution by detected mail service.</p>
+              </div>
+
+              <div className="py-4 flex flex-col items-center justify-center">
+                <DonutGauge rate={summary.complianceRate} size={84} strokeWidth={8} label="Overall Score" />
+              </div>
+
+              <div className="space-y-2.5 border-t border-slate-800/80 pt-4">
+                {sources.slice(0, 4).map((s, idx) => {
+                  const pct = summary.totalVolume > 0 ? ((s.totalVolume / summary.totalVolume) * 100).toFixed(1) : 0;
+                  return (
+                    <div key={idx} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                        <span className="font-semibold text-slate-200 truncate">{s.sourceName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 font-mono shrink-0">
+                        <span className="text-white font-bold">{s.totalVolume.toLocaleString()}</span>
+                        <span className="text-slate-500 text-[10px]">({pct}%)</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Top Sending Sources Table */}
           <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Server className="w-4 h-4 text-cyan-400" />
-                  Sending Sources & Vendor Inventory
+                  Sending Sources Overview
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Identification of authorized SaaS platforms, ESP mail services, forwarders, and shadow infrastructure.
+                  High-level breakdown of all email sending vendors identified in DMARC aggregates.
                 </p>
               </div>
-              <span className="text-xs text-slate-400 font-medium">
-                Showing {filteredSources.length} of {sources.length} sources
-              </span>
+              <button
+                onClick={() => setSubView('per_source')}
+                className="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Full Per-Source Explorer</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Sending Vendor / Service</th>
+                    <th className="py-3 px-4">Sending Source</th>
                     <th className="py-3 px-4">Source Type</th>
-                    <th className="py-3 px-4">Base Domain & ISP</th>
-                    <th className="py-3 px-4 text-right">Volume</th>
-                    <th className="py-3 px-4 text-center">Compliance</th>
-                    <th className="py-3 px-4 text-center">SPF Aligned</th>
-                    <th className="py-3 px-4 text-center">DKIM Aligned</th>
-                    <th className="py-3 px-4">Dispositions</th>
-                    <th className="py-3 px-4 text-right">Recommended Action</th>
+                    <th className="py-3 px-4 text-right">Total Messages</th>
+                    <th className="py-3 px-4 text-center">DMARC Compliant</th>
+                    <th className="py-3 px-4">DKIM Verification</th>
+                    <th className="py-3 px-4">SPF Verification</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                  {sources.slice(0, 5).map((s, idx) => (
+                    <tr key={idx} className="hover:bg-slate-800/30 transition">
+                      <td className="py-3 px-4 font-bold text-white">{s.sourceName}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                            s.categoryTag === 'DMARC compatible sources'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                              : s.categoryTag === 'Forwarded'
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                              : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                          }`}
+                        >
+                          {s.categoryTag}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-white">
+                        {s.totalVolume.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <DonutGauge rate={s.complianceRate} size={42} strokeWidth={4} />
+                      </td>
+                      <td className="py-3 px-4">
+                        <SplitProgressBar title="DKIM" passRate={s.dkimRate} />
+                      </td>
+                      <td className="py-3 px-4">
+                        <SplitProgressBar title="SPF" passRate={s.spfRate} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* VIEW 2: PER SENDING SOURCE (WITH EXPANDABLE NESTED ROWS) */}
+      {/* ======================================================== */}
+      {subView === 'per_source' && (
+        <div className="space-y-6">
+          {/* Top 3 Summary Filter Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button
+              onClick={() => setSourceCategoryFilter(sourceCategoryFilter === 'DMARC compatible sources' ? 'all' : 'DMARC compatible sources')}
+              className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
+                sourceCategoryFilter === 'DMARC compatible sources'
+                  ? 'bg-emerald-950/40 border-emerald-500 shadow-lg shadow-emerald-500/10'
+                  : 'bg-slate-900/60 border-slate-800 hover:border-emerald-500/40'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  {t('reports.dmarcCompatibleSources', 'DMARC compatible sources')}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300">
+                  {sourceStats.compatible.count}
+                </span>
+              </div>
+              <div className="text-2xl font-black text-white mt-2 font-mono">
+                {sourceStats.compatible.volume.toLocaleString()}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Authorized email systems passing authentication</p>
+            </button>
+
+            <button
+              onClick={() => setSourceCategoryFilter(sourceCategoryFilter === 'Forwarded' ? 'all' : 'Forwarded')}
+              className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
+                sourceCategoryFilter === 'Forwarded'
+                  ? 'bg-blue-950/40 border-blue-500 shadow-lg shadow-blue-500/10'
+                  : 'bg-slate-900/60 border-slate-800 hover:border-blue-500/40'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                  {t('reports.forwardedSources', 'Forwarded')}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-500/20 text-blue-300">
+                  {sourceStats.forwarded.count}
+                </span>
+              </div>
+              <div className="text-2xl font-black text-white mt-2 font-mono">
+                {sourceStats.forwarded.volume.toLocaleString()}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Intermediary relays surviving via intact DKIM signatures</p>
+            </button>
+
+            <button
+              onClick={() => setSourceCategoryFilter(sourceCategoryFilter === 'Failed' ? 'all' : 'Failed')}
+              className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
+                sourceCategoryFilter === 'Failed'
+                  ? 'bg-rose-950/40 border-rose-500 shadow-lg shadow-rose-500/10'
+                  : 'bg-slate-900/60 border-slate-800 hover:border-rose-500/40'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-rose-400">
+                  {t('reports.failedSources', 'Failed')}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300">
+                  {sourceStats.failed.count}
+                </span>
+              </div>
+              <div className="text-2xl font-black text-white mt-2 font-mono">
+                {sourceStats.failed.volume.toLocaleString()}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Shadow IT or unauthorized spoofers failing both checks</p>
+            </button>
+          </div>
+
+          {/* Search bar & filter pill bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('reports.searchPlaceholder', 'Search vendors, IPs, hostnames...')}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
+              />
+            </div>
+            <div className="text-xs text-slate-400 font-medium">
+              Showing {filteredSources.length} of {sources.length} sending sources
+            </div>
+          </div>
+
+          {/* Per Sending Source Main Table */}
+          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                  <tr>
+                    <th className="py-3 px-4 w-10"></th>
+                    <th className="py-3 px-4">Sending Source</th>
+                    <th className="py-3 px-4">Source Type</th>
+                    <th className="py-3 px-4 text-right">Messages</th>
+                    <th className="py-3 px-4 text-center">DMARC Compliance</th>
+                    <th className="py-3 px-4">DKIM Verification</th>
+                    <th className="py-3 px-4">SPF Verification</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {filteredSources.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="py-8 text-center text-slate-500">
-                        No sending sources detected matching the current scope.
+                      <td colSpan="7" className="py-8 text-center text-slate-500">
+                        No sending sources match the current filter.
                       </td>
                     </tr>
                   ) : (
                     filteredSources.map((s, idx) => {
-                      const isHighCompliance = s.complianceRate >= 95;
-                      const isMidCompliance = s.complianceRate >= 50 && s.complianceRate < 95;
-                      const isLowCompliance = s.complianceRate < 50;
+                      const isExpanded = !!expandedSources[s.sourceName];
                       return (
-                        <tr key={idx} className="hover:bg-slate-800/30 transition">
-                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                            {s.sourceName}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700/60">
-                              {s.sourceType || 'SaaS / Mailer'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="font-mono text-slate-200">{s.baseDomain || 'N/A'}</div>
-                            <div className="text-[10px] text-slate-500">{s.asName || 'Direct'}</div>
-                          </td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-white">
-                            {s.totalVolume.toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <div className="inline-flex items-center gap-1.5">
+                        <React.Fragment key={idx}>
+                          <tr
+                            onClick={() => toggleSourceExpand(s.sourceName)}
+                            className="hover:bg-slate-800/40 transition cursor-pointer"
+                          >
+                            <td className="py-3 px-4 text-center">
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-cyan-400 inline" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-slate-500 inline" />
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-white flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
+                                <span>{s.sourceName}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                {s.baseDomain || s.asName || 'Direct Server'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
                               <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  isHighCompliance
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                    : isMidCompliance
-                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                    : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                  s.categoryTag === 'DMARC compatible sources'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                    : s.categoryTag === 'Forwarded'
+                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                                 }`}
                               >
-                                {s.complianceRate}%
+                                {s.categoryTag}
                               </span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-center font-mono text-[11px]">
-                            {s.spfAlignedVolume ? (
-                              <span className="text-emerald-400 font-semibold">{s.spfAlignedVolume.toLocaleString()}</span>
-                            ) : (
-                              <span className="text-slate-600">-</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-center font-mono text-[11px]">
-                            {s.dkimAlignedVolume ? (
-                              <span className="text-emerald-400 font-semibold">{s.dkimAlignedVolume.toLocaleString()}</span>
-                            ) : (
-                              <span className="text-slate-600">-</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                              {s.dispositions.none > 0 && (
-                                <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
-                                  none: {s.dispositions.none}
-                                </span>
-                              )}
-                              {s.dispositions.quarantine > 0 && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-400 border border-amber-800">
-                                  quar: {s.dispositions.quarantine}
-                                </span>
-                              )}
-                              {s.dispositions.reject > 0 && (
-                                <span className="px-1.5 py-0.2 rounded bg-red-950 text-red-400 border border-red-800">
-                                  rej: {s.dispositions.reject}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            {isHighCompliance ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Fully Aligned
-                              </span>
-                            ) : isMidCompliance ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400">
-                                <AlertTriangle className="w-3.5 h-3.5" />
-                                Add DKIM / SPF
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-400">
-                                <ShieldAlert className="w-3.5 h-3.5" />
-                                Block or Investigate
-                              </span>
-                            )}
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-white">
+                              {s.totalVolume.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <DonutGauge rate={s.complianceRate} size={46} strokeWidth={4} />
+                            </td>
+                            <td className="py-3 px-4">
+                              <SplitProgressBar title="DKIM" passRate={s.dkimRate} />
+                            </td>
+                            <td className="py-3 px-4">
+                              <SplitProgressBar title="SPF" passRate={s.spfRate} />
+                            </td>
+                          </tr>
+
+                          {/* EXPANDABLE NESTED ROW: EXACT POWERDMARC PATTERN */}
+                          {isExpanded && (
+                            <tr className="bg-slate-950/80">
+                              <td colSpan="7" className="p-4 pl-12 border-b border-slate-800">
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <h5 className="text-xs font-bold text-cyan-300 flex items-center gap-2">
+                                      <Network className="w-3.5 h-3.5 text-cyan-400" />
+                                      Sending Hostnames & IP Addresses for {s.sourceName}
+                                    </h5>
+                                    <span className="text-[10px] text-slate-400">
+                                      {s.hosts?.length || 0} host records
+                                    </span>
+                                  </div>
+
+                                  <div className="overflow-x-auto border border-slate-800/80 rounded-xl bg-slate-900/60">
+                                    <table className="w-full text-left text-xs">
+                                      <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider text-[9px] border-b border-slate-800">
+                                        <tr>
+                                          <th className="py-2.5 px-3">Sender Hostname</th>
+                                          <th className="py-2.5 px-3">Country & IP Address</th>
+                                          <th className="py-2.5 px-3 text-right">Messages</th>
+                                          <th className="py-2.5 px-3 text-center">Compliant</th>
+                                          <th className="py-2.5 px-3">DKIM Status</th>
+                                          <th className="py-2.5 px-3">SPF Status</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-800/40 text-slate-300">
+                                        {!s.hosts || s.hosts.length === 0 ? (
+                                          <tr>
+                                            <td colSpan="6" className="py-4 text-center text-slate-500 text-[11px]">
+                                              No individual host IPs recorded for this source.
+                                            </td>
+                                          </tr>
+                                        ) : (
+                                          s.hosts.map((h, hIdx) => (
+                                            <tr key={hIdx} className="hover:bg-slate-800/20">
+                                              <td className="py-2.5 px-3 font-mono text-[11px] text-slate-200">
+                                                {h.hostname}
+                                              </td>
+                                              <td className="py-2.5 px-3 font-mono text-[11px] flex items-center gap-2">
+                                                <span>{getCountryFlag(h.country)}</span>
+                                                <span className="text-cyan-300 font-bold">{h.ip}</span>
+                                              </td>
+                                              <td className="py-2.5 px-3 text-right font-mono font-bold text-white">
+                                                {h.totalVolume.toLocaleString()}
+                                              </td>
+                                              <td className="py-2.5 px-3 text-center">
+                                                {h.isCompliant ? (
+                                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                    Yes
+                                                  </span>
+                                                ) : (
+                                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                                    No
+                                                  </span>
+                                                )}
+                                              </td>
+                                              <td className="py-2.5 px-3">
+                                                <div className="flex items-center gap-1 text-[10px] font-mono">
+                                                  <span
+                                                    className={`w-2 h-2 rounded-full ${
+                                                      h.dkimAligned ? 'bg-emerald-400' : 'bg-rose-400'
+                                                    }`}
+                                                  />
+                                                  <span>{h.dkimAligned ? 'Aligned' : 'Unaligned'}</span>
+                                                </div>
+                                              </td>
+                                              <td className="py-2.5 px-3">
+                                                <div className="flex items-center gap-1 text-[10px] font-mono">
+                                                  <span
+                                                    className={`w-2 h-2 rounded-full ${
+                                                      h.spfAligned ? 'bg-emerald-400' : 'bg-rose-400'
+                                                    }`}
+                                                  />
+                                                  <span>{h.spfAligned ? 'Aligned' : 'Unaligned'}</span>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })
                   )}
@@ -467,137 +937,150 @@ export default function AggregateReportsView({
       )}
 
       {/* ======================================================== */}
-      {/* SUB-VIEW 2: PER RESULT */}
+      {/* VIEW 3: PER RESULT (EXACT 3 POWERDMARC GROUPS)          */}
       {/* ======================================================== */}
-      {subView === 'results' && (
+      {subView === 'per_result' && perResultGroups && (
         <div className="space-y-6">
-          {/* Interactive Result Category Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* 1. DMARC Compliant */}
-            <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-slate-900/60 to-slate-900/80 shadow-lg relative overflow-hidden">
+          {/* Top 3 Classification Groups matching PowerDMARC */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* GROUP 1: DMARC correct - DKIM or SPF aligned */}
+            <div className="glass-panel p-5 rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/20 via-slate-900/60 to-slate-900/80 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   RFC 7489 PASS
                 </span>
                 <CheckCircle2 className="w-5 h-5 text-emerald-400" />
               </div>
-              <h4 className="text-sm font-bold text-white mt-3">DMARC Compliant</h4>
-              <div className="text-2xl font-black text-emerald-400 mt-1">
-                {results.compliant.count.toLocaleString()}
+              <div>
+                <h4 className="text-sm font-bold text-white">
+                  🏆 {perResultGroups.correctGroup.title}
+                </h4>
+                <div className="text-3xl font-black text-emerald-400 mt-2 font-mono">
+                  {perResultGroups.correctGroup.totalVolume.toLocaleString()}
+                </div>
+                <p className="text-xs font-semibold text-emerald-300/80 mt-0.5">
+                  {perResultGroups.correctGroup.percentage}% of total traffic
+                </p>
               </div>
-              <p className="text-xs font-semibold text-emerald-300/80 mt-0.5">
-                {results.compliant.pct}% of total traffic
-              </p>
-              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                Legitimate corporate email aligned with either SPF or DKIM identifier. Guaranteed inbox delivery.
-              </p>
+
+              {/* Sub-Items List */}
+              <div className="border-t border-slate-800/80 pt-3 space-y-2 text-xs">
+                {perResultGroups.correctGroup.subItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-none">
+                    <span className="text-slate-300 font-medium">{item.name}</span>
+                    <div className="font-mono text-right">
+                      <span className="font-bold text-white">{item.count.toLocaleString()}</span>
+                      <span className="text-slate-500 text-[10px] ml-1">({item.pct}%)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* 2. Non-Compliant */}
-            <div className="glass-panel p-5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-slate-900/60 to-slate-900/80 shadow-lg relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  FAILED ALIGNMENT
-                </span>
-                <AlertTriangle className="w-5 h-5 text-amber-400" />
-              </div>
-              <h4 className="text-sm font-bold text-white mt-3">Non-Compliant</h4>
-              <div className="text-2xl font-black text-amber-400 mt-1">
-                {results.nonCompliant.count.toLocaleString()}
-              </div>
-              <p className="text-xs font-semibold text-amber-300/80 mt-0.5">
-                {results.nonCompliant.pct}% of total traffic
-              </p>
-              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                Messages from known or unknown senders failing domain alignment. Delivered under p=none or flagged.
-              </p>
-            </div>
-
-            {/* 3. Forwarded / Indirect */}
-            <div className="glass-panel p-5 rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-950/20 via-slate-900/60 to-slate-900/80 shadow-lg relative overflow-hidden">
+            {/* GROUP 2: Authenticated - DKIM or SPF valid */}
+            <div className="glass-panel p-5 rounded-2xl border border-blue-500/40 bg-gradient-to-br from-blue-950/20 via-slate-900/60 to-slate-900/80 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  INDIRECT RELAYS
+                  VALID NOT ALIGNED
                 </span>
                 <Network className="w-5 h-5 text-blue-400" />
               </div>
-              <h4 className="text-sm font-bold text-white mt-3">Forwarded / Indirect</h4>
-              <div className="text-2xl font-black text-blue-400 mt-1">
-                {results.forwarded.count.toLocaleString()}
+              <div>
+                <h4 className="text-sm font-bold text-white">
+                  🔑 {perResultGroups.authenticatedGroup.title}
+                </h4>
+                <div className="text-3xl font-black text-blue-400 mt-2 font-mono">
+                  {perResultGroups.authenticatedGroup.totalVolume.toLocaleString()}
+                </div>
+                <p className="text-xs font-semibold text-blue-300/80 mt-0.5">
+                  {perResultGroups.authenticatedGroup.percentage}% of total traffic
+                </p>
               </div>
-              <p className="text-xs font-semibold text-blue-300/80 mt-0.5">
-                {results.forwarded.pct}% of total traffic
-              </p>
-              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                SPF failed because of intermediate forwarder IP, but DKIM signature survived intact. Protected.
-              </p>
+
+              {/* Sub-Items List */}
+              <div className="border-t border-slate-800/80 pt-3 space-y-2 text-xs">
+                {perResultGroups.authenticatedGroup.subItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-none">
+                    <span className="text-slate-300 font-medium">{item.name}</span>
+                    <div className="font-mono text-right">
+                      <span className="font-bold text-white">{item.count.toLocaleString()}</span>
+                      <span className="text-slate-500 text-[10px] ml-1">({item.pct}%)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* 4. Blocked Threats */}
-            <div className="glass-panel p-5 rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-950/20 via-slate-900/60 to-slate-900/80 shadow-lg relative overflow-hidden">
+            {/* GROUP 3: Invalid flows - DKIM and SPF invalid */}
+            <div className="glass-panel p-5 rounded-2xl border border-rose-500/40 bg-gradient-to-br from-rose-950/20 via-slate-900/60 to-slate-900/80 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500/20 text-red-300 border border-red-500/30">
-                  SPOOFING BLOCKED
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  SPOOFING / REJECTED
                 </span>
-                <ShieldAlert className="w-5 h-5 text-red-400" />
+                <ShieldAlert className="w-5 h-5 text-rose-400" />
               </div>
-              <h4 className="text-sm font-bold text-white mt-3">Threats / Blocked</h4>
-              <div className="text-2xl font-black text-red-400 mt-1">
-                {results.threats.count.toLocaleString()}
+              <div>
+                <h4 className="text-sm font-bold text-white">
+                  ⚠️ {perResultGroups.invalidGroup.title}
+                </h4>
+                <div className="text-3xl font-black text-rose-400 mt-2 font-mono">
+                  {perResultGroups.invalidGroup.totalVolume.toLocaleString()}
+                </div>
+                <p className="text-xs font-semibold text-rose-300/80 mt-0.5">
+                  {perResultGroups.invalidGroup.percentage}% of total traffic
+                </p>
               </div>
-              <p className="text-xs font-semibold text-red-300/80 mt-0.5">
-                {results.threats.pct}% of total traffic
-              </p>
-              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                Fraudulent spoofing attempts quarantined or rejected at mail gateways by receiver enforcement.
-              </p>
+
+              {/* Sub-Items List */}
+              <div className="border-t border-slate-800/80 pt-3 space-y-2 text-xs">
+                {perResultGroups.invalidGroup.subItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-none">
+                    <span className="text-slate-300 font-medium">{item.name}</span>
+                    <div className="font-mono text-right">
+                      <span className="font-bold text-white">{item.count.toLocaleString()}</span>
+                      <span className="text-slate-500 text-[10px] ml-1">({item.pct}%)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Proportional Distribution Visual Bar */}
+          {/* Proportional Overview Bar */}
           <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/50 space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
               <PieChart className="w-4 h-4 text-cyan-400" />
-              Aggregate Authentication Result Proportions
-            </h3>
+              Aggregate Authentication Flow Proportions
+            </h4>
             <div className="h-4 rounded-xl overflow-hidden flex bg-slate-950 border border-slate-800">
               <div
-                style={{ width: `${results.compliant.pct}%` }}
+                style={{ width: `${perResultGroups.correctGroup.percentage}%` }}
                 className="bg-emerald-500 h-full transition-all duration-500"
-                title={`Compliant: ${results.compliant.pct}%`}
+                title={`Correct: ${perResultGroups.correctGroup.percentage}%`}
               />
               <div
-                style={{ width: `${results.nonCompliant.pct}%` }}
-                className="bg-amber-500 h-full transition-all duration-500"
-                title={`Non-Compliant: ${results.nonCompliant.pct}%`}
-              />
-              <div
-                style={{ width: `${results.forwarded.pct}%` }}
+                style={{ width: `${perResultGroups.authenticatedGroup.percentage}%` }}
                 className="bg-blue-500 h-full transition-all duration-500"
-                title={`Forwarded: ${results.forwarded.pct}%`}
+                title={`Authenticated unaligned: ${perResultGroups.authenticatedGroup.percentage}%`}
               />
               <div
-                style={{ width: `${results.threats.pct}%` }}
-                className="bg-red-500 h-full transition-all duration-500"
-                title={`Threats Blocked: ${results.threats.pct}%`}
+                style={{ width: `${perResultGroups.invalidGroup.percentage}%` }}
+                className="bg-rose-500 h-full transition-all duration-500"
+                title={`Invalid flows: ${perResultGroups.invalidGroup.percentage}%`}
               />
             </div>
             <div className="flex flex-wrap items-center gap-6 text-xs font-medium text-slate-300">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span>Compliant ({results.compliant.pct}%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-amber-500" />
-                <span>Non-Compliant ({results.nonCompliant.pct}%)</span>
+                <span>DMARC Correct ({perResultGroups.correctGroup.percentage}%)</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-blue-500" />
-                <span>Forwarded ({results.forwarded.pct}%)</span>
+                <span>Authenticated Valid ({perResultGroups.authenticatedGroup.percentage}%)</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-red-500" />
-                <span>Threats Blocked ({results.threats.pct}%)</span>
+                <span className="w-3 h-3 rounded-full bg-rose-500" />
+                <span>Invalid Flows ({perResultGroups.invalidGroup.percentage}%)</span>
               </div>
             </div>
           </div>
@@ -605,78 +1088,73 @@ export default function AggregateReportsView({
       )}
 
       {/* ======================================================== */}
-      {/* SUB-VIEW 3: PER ORGANIZATION */}
+      {/* VIEW 4: PER ORGANIZATION                                 */}
       {/* ======================================================== */}
-      {subView === 'orgs' && (
+      {subView === 'per_org' && (
         <div className="space-y-4">
-          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-cyan-400" />
-                  Receiver Mailbox Organizations
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Reporting providers (Google, Microsoft 365, Yahoo, Comcast, etc.) evaluating authentication.
-                </p>
-              </div>
-              <span className="text-xs text-slate-400 font-medium">
-                {organizations.length} reporting organizations
-              </span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search reporting mailbox providers..."
+                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
+              />
             </div>
+            <div className="text-xs text-slate-400 font-medium">
+              Showing {filteredOrgs.length} reporting organizations
+            </div>
+          </div>
 
+          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
                     <th className="py-3 px-4">Reporting Organization</th>
-                    <th className="py-3 px-4 text-right">Reported Volume</th>
-                    <th className="py-3 px-4 text-right">Passed Messages</th>
-                    <th className="py-3 px-4 text-center">Compliance Rate</th>
-                    <th className="py-3 px-4 text-center">Unique Sending IPs</th>
-                    <th className="py-3 px-4">Applied Dispositions</th>
+                    <th className="py-3 px-4 text-right">Messages</th>
+                    <th className="py-3 px-4 text-center">Unique IPs</th>
+                    <th className="py-3 px-4 text-center">DMARC Compliance</th>
+                    <th className="py-3 px-4">DKIM Verification</th>
+                    <th className="py-3 px-4">SPF Verification</th>
+                    <th className="py-3 px-4">Dispositions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {filteredOrgs.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="py-8 text-center text-slate-500">
-                        No organization reports found for current scope.
+                      <td colSpan="7" className="py-8 text-center text-slate-500">
+                        No organization reports match the current filter.
                       </td>
                     </tr>
                   ) : (
                     filteredOrgs.map((org, idx) => (
                       <tr key={idx} className="hover:bg-slate-800/30 transition">
                         <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-cyan-400" />
-                          {org.orgName}
+                          <Building2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                          <span>{org.orgName}</span>
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-white">
                           {org.totalVolume.toLocaleString()}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-emerald-400">
-                          {org.passedVolume.toLocaleString()}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              org.complianceRate >= 95
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : org.complianceRate >= 70
-                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                            }`}
-                          >
-                            {org.complianceRate}%
-                          </span>
                         </td>
                         <td className="py-3 px-4 text-center font-mono">
                           <span className="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700">
                             {org.uniqueIps} IPs
                           </span>
                         </td>
+                        <td className="py-3 px-4 text-center">
+                          <DonutGauge rate={org.complianceRate} size={46} strokeWidth={4} />
+                        </td>
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                          <SplitProgressBar title="DKIM" passRate={org.dkimRate} />
+                        </td>
+                        <td className="py-3 px-4">
+                          <SplitProgressBar title="SPF" passRate={org.spfRate} />
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1 text-[10px] font-mono">
                             {org.dispositions.none > 0 && (
                               <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
                                 none: {org.dispositions.none}
@@ -688,7 +1166,7 @@ export default function AggregateReportsView({
                               </span>
                             )}
                             {org.dispositions.reject > 0 && (
-                              <span className="px-1.5 py-0.2 rounded bg-red-950 text-red-400 border border-red-800">
+                              <span className="px-1.5 py-0.2 rounded bg-rose-950 text-rose-400 border border-rose-800">
                                 rej: {org.dispositions.reject}
                               </span>
                             )}
@@ -705,95 +1183,134 @@ export default function AggregateReportsView({
       )}
 
       {/* ======================================================== */}
-      {/* SUB-VIEW 4: PER HOST */}
+      {/* VIEW 5: PER HOST (WITH 3 TOP DONUTS)                     */}
       {/* ======================================================== */}
-      {subView === 'hosts' && (
-        <div className="space-y-4">
-          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+      {subView === 'per_host' && (
+        <div className="space-y-6">
+          {/* 3 Top Donut Summary Cards matching PowerDMARC */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-lg flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Network className="w-4 h-4 text-cyan-400" />
-                  Sending Host IP Addresses & PTR Records
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Granular server level inspection including reverse DNS, ASN telecom providers, and alignment flags.
-                </p>
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  {t('reports.dmarcCorrect', 'DMARC Correct')}
+                </span>
+                <div className="text-2xl font-black text-white mt-1 font-mono">
+                  {summary.compliantVolume.toLocaleString()}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Passing domain alignment</p>
               </div>
-              <span className="text-xs text-slate-400 font-medium">
-                {filteredHosts.length} hosts
-              </span>
+              <DonutGauge rate={summary.complianceRate} size={58} strokeWidth={5} />
             </div>
 
+            <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-lg flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                  {t('reports.authenticated', 'Authenticated')}
+                </span>
+                <div className="text-2xl font-black text-white mt-1 font-mono">
+                  {summary.forwardedVolume.toLocaleString()}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Valid key / relay flow</p>
+              </div>
+              <DonutGauge
+                rate={
+                  summary.totalVolume > 0
+                    ? Number(((summary.forwardedVolume / summary.totalVolume) * 100).toFixed(1))
+                    : 0
+                }
+                size={58}
+                strokeWidth={5}
+              />
+            </div>
+
+            <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-lg flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-rose-400">
+                  {t('reports.invalidFlows', 'Invalid flows')}
+                </span>
+                <div className="text-2xl font-black text-white mt-1 font-mono">
+                  {summary.threatVolume.toLocaleString()}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Impersonation / spoofed</p>
+              </div>
+              <DonutGauge
+                rate={
+                  summary.totalVolume > 0
+                    ? Number(((summary.threatVolume / summary.totalVolume) * 100).toFixed(1))
+                    : 0
+                }
+                size={58}
+                strokeWidth={5}
+              />
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search sending host IP, PTR, country..."
+                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
+              />
+            </div>
+            <div className="text-xs text-slate-400 font-medium">
+              Showing {filteredHosts.length} sending hosts
+            </div>
+          </div>
+
+          {/* Host Table */}
+          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Sending IP Address</th>
-                    <th className="py-3 px-4">Reverse DNS (PTR Hostname)</th>
-                    <th className="py-3 px-4">Country & Network (ASN)</th>
+                    <th className="py-3 px-4">Hostname (PTR)</th>
+                    <th className="py-3 px-4">Country & Sending IP</th>
                     <th className="py-3 px-4 text-right">Messages</th>
-                    <th className="py-3 px-4 text-center">Compliance</th>
-                    <th className="py-3 px-4 text-center">SPF Aligned</th>
-                    <th className="py-3 px-4 text-center">DKIM Aligned</th>
+                    <th className="py-3 px-4 text-center">DMARC Compliance</th>
+                    <th className="py-3 px-4">DKIM Verification</th>
+                    <th className="py-3 px-4">SPF Verification</th>
                     <th className="py-3 px-4 text-right">Receiver Policy</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {filteredHosts.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-8 text-center text-slate-500">
-                        No sending hosts match the current search filter.
+                      <td colSpan="7" className="py-8 text-center text-slate-500">
+                        No sending hosts match the current search.
                       </td>
                     </tr>
                   ) : (
                     filteredHosts.map((h, idx) => (
                       <tr key={idx} className="hover:bg-slate-800/30 transition">
-                        <td className="py-3 px-4 font-mono font-bold text-cyan-300">
-                          {h.ip}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-slate-300">
+                        <td className="py-3 px-4 font-mono font-medium text-slate-200">
                           {h.ptr || 'No PTR Record'}
                         </td>
-                        <td className="py-3 px-4">
-                          <span className="font-semibold text-slate-200">{h.country}</span>
-                          <span className="text-[10px] text-slate-500 ml-1.5">• {h.asName}</span>
+                        <td className="py-3 px-4 font-mono text-[11px] flex items-center gap-2">
+                          <span>{getCountryFlag(h.country)}</span>
+                          <span className="text-cyan-300 font-bold">{h.ip}</span>
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-white">
                           {h.totalVolume.toLocaleString()}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              h.complianceRate === 100
-                                ? 'bg-emerald-500/20 text-emerald-300'
-                                : h.complianceRate === 0
-                                ? 'bg-red-500/20 text-red-300'
-                                : 'bg-amber-500/20 text-amber-300'
-                            }`}
-                          >
-                            {h.complianceRate}%
-                          </span>
+                          <DonutGauge rate={h.complianceRate} size={46} strokeWidth={4} />
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          {h.spfAligned ? (
-                            <span className="text-emerald-400 font-bold">PASS</span>
-                          ) : (
-                            <span className="text-red-400 font-bold">FAIL</span>
-                          )}
+                        <td className="py-3 px-4">
+                          <SplitProgressBar title="DKIM" passRate={h.dkimRate} />
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          {h.dkimAligned ? (
-                            <span className="text-emerald-400 font-bold">PASS</span>
-                          ) : (
-                            <span className="text-red-400 font-bold">FAIL</span>
-                          )}
+                        <td className="py-3 px-4">
+                          <SplitProgressBar title="SPF" passRate={h.spfRate} />
                         </td>
                         <td className="py-3 px-4 text-right font-mono">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               h.disposition === 'reject'
-                                ? 'bg-red-950 text-red-400 border border-red-800'
+                                ? 'bg-rose-950 text-rose-400 border border-rose-800'
                                 : h.disposition === 'quarantine'
                                 ? 'bg-amber-950 text-amber-400 border border-amber-800'
                                 : 'bg-cyan-950 text-cyan-400 border border-cyan-800'
@@ -813,91 +1330,404 @@ export default function AggregateReportsView({
       )}
 
       {/* ======================================================== */}
-      {/* SUB-VIEW 5: DETAILED & GEO THREAT MAP */}
+      {/* VIEW 6: DETAILED STATS (WITH DUAL SEARCH INPUTS)         */}
       {/* ======================================================== */}
-      {subView === 'threats' && (
+      {subView === 'detailed' && (
         <div className="space-y-4">
+          {/* Dual Search Filters matching PowerDMARC */}
+          <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg flex flex-col md:flex-row items-center gap-4">
+            <div className="relative flex-1 w-full">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={hostnameSearch}
+                onChange={(e) => setHostnameSearch(e.target.value)}
+                placeholder={t('reports.searchHostname', 'Search Hostname')}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
+              />
+            </div>
+            <div className="relative flex-1 w-full">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={ipSearch}
+                onChange={(e) => setIpSearch(e.target.value)}
+                placeholder={t('reports.searchIp', 'Search IP address / CIDR')}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
+              />
+            </div>
+            <div className="text-xs text-slate-400 font-medium whitespace-nowrap">
+              Showing {filteredDetailedHits.length} itemized records
+            </div>
+          </div>
+
           <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                  <tr>
+                    <th className="py-3 px-4">Sender Hostname</th>
+                    <th className="py-3 px-4">Country & IP Address</th>
+                    <th className="py-3 px-4">Reporting Org</th>
+                    <th className="py-3 px-4 text-right">Volume</th>
+                    <th className="py-3 px-4 text-center">Compliant</th>
+                    <th className="py-3 px-4">DKIM Status</th>
+                    <th className="py-3 px-4">SPF Status</th>
+                    <th className="py-3 px-4 text-right">Disposition</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                  {filteredDetailedHits.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="py-8 text-center text-slate-500">
+                        No itemized records match the current hostname or IP filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDetailedHits.map((h, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/30 transition">
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-200">
+                          {h.hostname}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[11px]">
+                          <a
+                            href={`https://www.google.com/search?q=whois+${h.ip}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-300 hover:text-cyan-200 hover:underline flex items-center gap-1.5"
+                          >
+                            <span>{getCountryFlag(h.country)}</span>
+                            <span>{h.ip}</span>
+                            <ExternalLink className="w-3 h-3 opacity-60" />
+                          </a>
+                        </td>
+                        <td className="py-3 px-4 text-slate-300 font-medium">
+                          {h.org}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-white">
+                          {h.volume.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {h.compliant ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Yes
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              No
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                h.dkimAligned ? 'bg-emerald-400' : 'bg-rose-400'
+                              }`}
+                            />
+                            <span className={h.dkimAligned ? 'text-emerald-400' : 'text-rose-400'}>
+                              {h.dkimAligned ? 'Aligned' : 'Unaligned'}
+                            </span>
+                            <span className="text-slate-500">({h.dkimSelector})</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                h.spfAligned ? 'bg-emerald-400' : 'bg-rose-400'
+                              }`}
+                            />
+                            <span className={h.spfAligned ? 'text-emerald-400' : 'text-rose-400'}>
+                              {h.spfAligned ? 'Aligned' : 'Unaligned'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-[11px]">
+                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                            p={h.disposition}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* VIEW 7: GEOLOCATION REPORT (INTERACTIVE WORLD MAP)       */}
+      {/* ======================================================== */}
+      {subView === 'geolocation' && (
+        <div className="space-y-6">
+          {/* Global Visualizer Canvas */}
+          <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Globe2 className="w-4 h-4 text-cyan-400" />
-                  Geographic Threat Vectors & Origin Distribution
+                  Global Origin Geographic Distribution
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Correlation of countries originating unauthorized or failed authentication messages.
+                  Plotted origin coordinates of mail transfer agents delivering mail for monitored domains.
                 </p>
               </div>
-              <span className="text-xs text-slate-400 font-medium">
-                {geoThreats.length} countries observed
-              </span>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1.5 text-emerald-400">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" /> Compliant
+                </span>
+                <span className="flex items-center gap-1.5 text-rose-400">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" /> Threat / Failed
+                </span>
+              </div>
             </div>
 
+            {/* Stylized World Map SVG with plotted coordinates */}
+            <div className="relative w-full h-80 rounded-2xl bg-slate-950 border border-slate-800/80 overflow-hidden flex items-center justify-center">
+              {/* Map Grid / Continental Vector background */}
+              <svg className="w-full h-full opacity-40" viewBox="0 0 1000 500">
+                <defs>
+                  <radialGradient id="mapGlow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="#0891b2" stopOpacity="0.15" />
+                    <stop offset="100%" stopColor="#020617" stopOpacity="0" />
+                  </radialGradient>
+                </defs>
+                <rect width="1000" height="500" fill="url(#mapGlow)" />
+                {/* Lat/Long Grid lines */}
+                <line x1="0" y1="250" x2="1000" y2="250" stroke="#1e293b" strokeDasharray="4 4" />
+                <line x1="500" y1="0" x2="500" y2="500" stroke="#1e293b" strokeDasharray="4 4" />
+                <line x1="250" y1="0" x2="250" y2="500" stroke="#0f172a" strokeDasharray="4 4" />
+                <line x1="750" y1="0" x2="750" y2="500" stroke="#0f172a" strokeDasharray="4 4" />
+
+                {/* Continental outlines (simplified aesthetic vector geometry) */}
+                <path
+                  d="M150,120 Q200,90 280,110 T330,190 T280,260 T210,240 T150,180 Z"
+                  fill="#1e293b"
+                  opacity="0.3"
+                />
+                <path
+                  d="M260,280 Q320,300 340,380 T300,470 T260,420 T230,320 Z"
+                  fill="#1e293b"
+                  opacity="0.3"
+                />
+                <path
+                  d="M450,110 Q540,80 620,130 T580,210 T490,190 T430,130 Z"
+                  fill="#1e293b"
+                  opacity="0.3"
+                />
+                <path
+                  d="M480,220 Q560,230 580,310 T520,440 T460,370 T440,260 Z"
+                  fill="#1e293b"
+                  opacity="0.3"
+                />
+                <path
+                  d="M600,100 Q780,80 880,140 T850,260 T720,280 T610,190 Z"
+                  fill="#1e293b"
+                  opacity="0.3"
+                />
+                <path
+                  d="M740,320 Q840,310 870,380 T800,430 T730,370 Z"
+                  fill="#1e293b"
+                  opacity="0.3"
+                />
+              </svg>
+
+              {/* Plotted IP Nodes */}
+              <div className="absolute inset-0 pointer-events-auto">
+                {geoPoints.map((pt, idx) => {
+                  // Equirectangular projection mapping:
+                  // x = ((lng + 180) / 360) * 100%
+                  // y = ((90 - lat) / 180) * 100%
+                  const x = ((pt.lng + 180) / 360) * 100;
+                  const y = ((90 - pt.lat) / 180) * 100;
+                  return (
+                    <div
+                      key={idx}
+                      style={{ left: `${x}%`, top: `${y}%` }}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer"
+                    >
+                      {/* Pulse Ring */}
+                      <span
+                        className={`absolute -inset-1.5 rounded-full animate-ping opacity-75 ${
+                          pt.compliant ? 'bg-emerald-500' : 'bg-rose-500'
+                        }`}
+                      />
+                      {/* Center Dot */}
+                      <span
+                        className={`relative block w-3 h-3 rounded-full border-2 border-slate-950 shadow-md ${
+                          pt.compliant ? 'bg-emerald-400' : 'bg-rose-500'
+                        }`}
+                      />
+
+                      {/* Tooltip on hover */}
+                      <div className="hidden group-hover:flex flex-col absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl shadow-2xl z-30 whitespace-nowrap text-[10px]">
+                        <span className="font-bold text-white flex items-center gap-1.5">
+                          <span>{getCountryFlag(pt.country)}</span>
+                          <span>{pt.ip}</span>
+                        </span>
+                        <span className="text-slate-400 font-mono">{pt.hostname}</span>
+                        <span className="text-white mt-0.5">Volume: {pt.volume}</span>
+                        <span className={pt.compliant ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                          {pt.compliant ? 'DMARC Compliant' : 'Failed / Threat'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Geo Locations Itemized List */}
+          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                Detected Origin Locations & Threat Exposure
+              </h4>
+              <span className="text-xs text-slate-400 font-mono">
+                {geoPoints.length} locations plotted
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                  <tr>
+                    <th className="py-3 px-4">Country & Flag</th>
+                    <th className="py-3 px-4">IP Address</th>
+                    <th className="py-3 px-4">PTR Hostname</th>
+                    <th className="py-3 px-4 text-right">Messages</th>
+                    <th className="py-3 px-4 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                  {geoPoints.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="py-8 text-center text-slate-500">
+                        No geolocation points available.
+                      </td>
+                    </tr>
+                  ) : (
+                    geoPoints.map((pt, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/30 transition">
+                        <td className="py-3 px-4 flex items-center gap-2 font-bold text-white">
+                          <span className="text-base">{getCountryFlag(pt.country)}</span>
+                          <span>{pt.country}</span>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-cyan-300">
+                          {pt.ip}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-300">
+                          {pt.hostname}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-white">
+                          {pt.volume.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {pt.compliant ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Compliant
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              Threat
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* VIEW 8: PER COUNTRY                                      */}
+      {/* ======================================================== */}
+      {subView === 'per_country' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search origin country or code..."
+                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
+              />
+            </div>
+            <div className="text-xs text-slate-400 font-medium">
+              Showing {countries.length} sending countries
+            </div>
+          </div>
+
+          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
                     <th className="py-3 px-4">Origin Country</th>
-                    <th className="py-3 px-4 text-right">Total Messages</th>
-                    <th className="py-3 px-4 text-right">Threat / Spoofed Volume</th>
-                    <th className="py-3 px-4">Threat Rate Proportion</th>
-                    <th className="py-3 px-4 text-right">Risk Level</th>
+                    <th className="py-3 px-4 text-right">Messages</th>
+                    <th className="py-3 px-4 text-center">Unique IPs</th>
+                    <th className="py-3 px-4 text-center">DMARC Compliance</th>
+                    <th className="py-3 px-4">DKIM Verification</th>
+                    <th className="py-3 px-4">SPF Verification</th>
+                    <th className="py-3 px-4 text-right">Threat Volume</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                  {filteredThreats.length === 0 ? (
+                  {countries.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="py-8 text-center text-slate-500">
-                        No geographic threat data available for current selection.
+                      <td colSpan="7" className="py-8 text-center text-slate-500">
+                        No sending country telemetry for current selection.
                       </td>
                     </tr>
                   ) : (
-                    filteredThreats.map((g, idx) => {
-                      const isHighRisk = g.threatRate >= 20 && g.threatVolume > 0;
-                      const isMidRisk = g.threatRate > 0 && g.threatRate < 20;
-                      return (
+                    countries
+                      .filter((c) => {
+                        if (!searchQuery) return true;
+                        const q = searchQuery.toLowerCase();
+                        return c.country && c.country.toLowerCase().includes(q);
+                      })
+                      .map((c, idx) => (
                         <tr key={idx} className="hover:bg-slate-800/30 transition">
-                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                            <span className="w-6 py-0.5 text-center rounded bg-slate-800 font-mono text-[10px] text-cyan-300 border border-slate-700">
-                              {g.country}
-                            </span>
-                            <span>{g.country === 'Unknown' ? 'Unresolved Geo' : g.country}</span>
+                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2.5">
+                            <span className="text-lg">{getCountryFlag(c.country)}</span>
+                            <span>{c.country === 'Unknown' ? 'Unresolved Country' : c.country}</span>
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-white">
-                            {g.totalVolume.toLocaleString()}
+                            {c.totalVolume.toLocaleString()}
                           </td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-red-400">
-                            {g.threatVolume.toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="w-full max-w-xs bg-slate-800 h-2 rounded-full overflow-hidden flex">
-                              <div
-                                style={{ width: `${g.threatRate}%` }}
-                                className={`h-full ${isHighRisk ? 'bg-red-500' : isMidRisk ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                              />
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
-                              {g.threatRate}% spoofed
+                          <td className="py-3 px-4 text-center font-mono">
+                            <span className="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700">
+                              {c.uniqueIps} IPs
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-right">
-                            {isHighRisk ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
-                                High Risk
-                              </span>
-                            ) : isMidRisk ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                Moderate Risk
-                              </span>
+                          <td className="py-3 px-4 text-center">
+                            <DonutGauge rate={c.complianceRate} size={46} strokeWidth={4} />
+                          </td>
+                          <td className="py-3 px-4">
+                            <SplitProgressBar title="DKIM" passRate={c.dkimRate} />
+                          </td>
+                          <td className="py-3 px-4">
+                            <SplitProgressBar title="SPF" passRate={c.spfRate} />
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold">
+                            {c.threatVolume > 0 ? (
+                              <span className="text-rose-400">{c.threatVolume.toLocaleString()}</span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                Low Risk
-                              </span>
+                              <span className="text-slate-500">0</span>
                             )}
                           </td>
                         </tr>
-                      );
-                    })
+                      ))
                   )}
                 </tbody>
               </table>
