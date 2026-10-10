@@ -188,6 +188,7 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
             selectedDomain={selectedDomain}
             onSelectDomain={setSelectedDomain}
             domains={domains}
+            currentUser={currentUser}
           />
         ) : activeTab === 'reports' ? (
           <ReportsDashboard

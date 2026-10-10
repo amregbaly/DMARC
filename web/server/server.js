@@ -569,10 +569,14 @@ app.get('/api/filters', authenticateToken, enforceDomainAccess, async (req, res)
     };
     const data = await queryOpenSearch('_search', query);
     
-    let returnedDomains = data.aggregations.domains.buckets.map(b => b.key);
-    if (req.user.role !== 'admin' && req.user.domains && req.user.domains.length > 0) {
-      // For managers / viewers, only return domains they are assigned
-      returnedDomains = req.user.domains;
+    let returnedDomains = (data.aggregations?.domains?.buckets || []).map(b => b.key);
+    if (req.user.role !== 'admin') {
+      // For managers / viewers, only return domains they are permitted to see
+      const userAllowed = Array.isArray(req.user.domains) ? req.user.domains : [];
+      const opensearchAllowed = returnedDomains.filter(d => userAllowed.includes(d));
+      returnedDomains = Array.from(new Set([...opensearchAllowed, ...userAllowed])).sort();
+    } else {
+      returnedDomains.sort();
     }
 
     res.json({
@@ -1860,12 +1864,29 @@ function generateObservations({ dmarc, spf, dkim, mtaSts, tlsRpt, dnssec }) {
 // Dedicated Domain Health API endpoint
 app.get('/api/domain-health', authenticateToken, enforceDomainAccess, async (req, res) => {
   try {
-    const rawDomain = req.query.domain || 'voxera.net';
+    let rawDomain = req.query.domain;
+    if (!rawDomain || rawDomain === 'all') {
+      if (req.user.role !== 'admin' && req.user.domains && req.user.domains.length > 0) {
+        rawDomain = req.user.domains[0];
+      } else {
+        rawDomain = 'example.com';
+      }
+    }
     const domain = cleanDomain(rawDomain);
     if (!domain) {
       return res.status(400).json({
         error: 'Invalid domain parameter. A valid fully-qualified domain name (FQDN) is required.'
       });
+    }
+
+    // Role-based domain check: non-admins can only audit their permitted domains
+    if (req.user.role !== 'admin') {
+      const userDomains = Array.isArray(req.user.domains) ? req.user.domains : [];
+      if (!userDomains.includes(domain)) {
+        return res.status(403).json({
+          error: `Access denied: You do not have permission to audit domain "${domain}".`
+        });
+      }
     }
     const rawSelector = req.query.selector;
     const selector = typeof rawSelector === 'string'

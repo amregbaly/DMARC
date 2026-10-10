@@ -25,7 +25,7 @@ import {
   Printer,
   Sparkles
 } from 'lucide-react';
-import { fetchDomainHealth } from '../services/api';
+import { fetchDomainHealth, fetchFilters } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 
 // Reusable Copyable Box
@@ -189,11 +189,42 @@ function SpfTreeNode({ node, isRoot = false }) {
   );
 }
 
-export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDomain, domains = [] }) {
+export default function DomainHealth({ selectedDomain = '', onSelectDomain, domains = [], currentUser }) {
   const { t, language } = useLanguage();
-  const [domainInput, setDomainInput] = useState(selectedDomain === 'all' ? 'voxera.net' : selectedDomain);
+  const [internalDomains, setInternalDomains] = useState([]);
+  const [isCustomMode, setIsCustomMode] = useState(false);
+
+  // Combine prop domains and internal fetched domains from OpenSearch
+  const opensearchDomains = (domains && domains.length > 0) ? domains : internalDomains;
+
+  // Role-based domain scoping:
+  // If admin: all domains returned from OpenSearch
+  // If non-admin: strictly domains assigned in currentUser.domains
+  const isAdmin = currentUser?.role === 'admin';
+  const userAllowedDomains = Array.isArray(currentUser?.domains) ? currentUser.domains : [];
+
+  const effectiveDomains = isAdmin
+    ? opensearchDomains
+    : (userAllowedDomains.length > 0
+        ? userAllowedDomains
+        : opensearchDomains);
+
+  // If domains prop is empty on mount, fetch filters from OpenSearch automatically
+  useEffect(() => {
+    if (!domains || domains.length === 0) {
+      fetchFilters().then(data => {
+        if (data?.domains) {
+          setInternalDomains(data.domains);
+        }
+      }).catch(err => {
+        console.error('Failed to load domains from OpenSearch:', err);
+      });
+    }
+  }, [domains]);
+
+  const [domainInput, setDomainInput] = useState('');
   const [selectorInput, setSelectorInput] = useState('');
-  const [activeDomain, setActiveDomain] = useState(selectedDomain === 'all' ? 'voxera.net' : selectedDomain);
+  const [activeDomain, setActiveDomain] = useState('');
   const [activeSelector, setActiveSelector] = useState('');
   
   const [data, setData] = useState(null);
@@ -218,6 +249,7 @@ export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDo
   };
 
   const loadData = async (domainToFetch, selectorToFetch) => {
+    if (!domainToFetch) return;
     setLoading(true);
     setError(null);
     try {
@@ -236,16 +268,54 @@ export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDo
     }
   };
 
+  // Sync active domain when selectedDomain or effectiveDomains changes
   useEffect(() => {
-    const target = selectedDomain === 'all' || !selectedDomain ? 'voxera.net' : selectedDomain;
-    setDomainInput(target);
-    loadData(target, selectorInput);
-  }, [selectedDomain]);
+    let target = '';
+    if (selectedDomain && selectedDomain !== 'all') {
+      if (isAdmin || effectiveDomains.includes(selectedDomain)) {
+        target = selectedDomain;
+      }
+    }
+    if (!target && effectiveDomains.length > 0) {
+      target = effectiveDomains[0];
+    }
+    if (!target && opensearchDomains.length > 0) {
+      target = opensearchDomains[0];
+    }
+
+    if (target && target !== activeDomain) {
+      setDomainInput(target);
+      setActiveDomain(target);
+      loadData(target, selectorInput);
+    }
+  }, [selectedDomain, effectiveDomains.join(',')]);
+
+  const handleDomainSelect = (dom) => {
+    if (dom === '__custom__') {
+      setIsCustomMode(true);
+      return;
+    }
+    setIsCustomMode(false);
+    setDomainInput(dom);
+    setActiveDomain(dom);
+    if (onSelectDomain) {
+      onSelectDomain(dom);
+    }
+    loadData(dom, selectorInput.trim());
+  };
 
   const handleSearchSubmit = (e) => {
     e?.preventDefault();
     if (!domainInput.trim()) return;
     const clean = domainInput.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    
+    // RBAC check: non-admins cannot audit domains outside their permissions
+    if (!isAdmin && userAllowedDomains.length > 0 && !userAllowedDomains.includes(clean)) {
+      setError(`Access denied: You do not have permission to audit domain "${clean}".`);
+      return;
+    }
+
+    setActiveDomain(clean);
     if (onSelectDomain) {
       onSelectDomain(clean);
     }
@@ -340,47 +410,68 @@ export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDo
             </div>
           </div>
 
-          {/* Quick Domain Pills */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-slate-500 font-medium mr-1">Benchmarks:</span>
-            {['voxera.net', 'google.com', 'microsoft.com'].map(dom => (
-              <button
-                key={dom}
-                onClick={() => {
-                  setDomainInput(dom);
-                  if (onSelectDomain) onSelectDomain(dom);
-                  loadData(dom, '');
-                }}
-                className={`px-2.5 py-1 text-xs rounded-lg font-mono transition cursor-pointer ${
-                  activeDomain === dom
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
-                }`}
-              >
-                {dom}
-              </button>
-            ))}
-          </div>
+          {/* Quick Domain Badges from OpenSearch */}
+          {effectiveDomains.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-slate-500 font-medium mr-1 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-cyan-400" />
+                {t('health.quickSelect', 'Quick select:')}
+              </span>
+              {effectiveDomains.slice(0, 5).map(dom => (
+                <button
+                  key={dom}
+                  type="button"
+                  onClick={() => handleDomainSelect(dom)}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-mono transition cursor-pointer flex items-center gap-1.5 ${
+                    activeDomain === dom && !isCustomMode
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold shadow-sm shadow-cyan-500/20'
+                      : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${activeDomain === dom && !isCustomMode ? 'bg-cyan-400' : 'bg-slate-600'}`} />
+                  <span>{dom}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Search Inputs Form */}
-        <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
-          {/* Domain input */}
+        {/* Interactive Domain Selection Dropdown & Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
+          {/* OpenSearch Monitored Domains Dropdown Menu */}
           <div className="md:col-span-6 relative">
-            <Globe className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={domainInput}
-              onChange={(e) => setDomainInput(e.target.value)}
-              placeholder={t('health.enterDomain', 'Enter domain (e.g. voxera.net)')}
-              className="w-full bg-slate-900/90 border border-slate-750 hover:border-slate-600 focus:border-cyan-500 text-sm text-slate-100 rounded-xl pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all font-mono"
-            />
+            <Globe className="w-4 h-4 text-cyan-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
+            <select
+              id="domain-health-select"
+              value={isCustomMode ? '__custom__' : (activeDomain || '')}
+              onChange={(e) => handleDomainSelect(e.target.value)}
+              className="w-full bg-slate-900/90 border border-slate-750 hover:border-slate-600 focus:border-cyan-500 text-sm font-semibold text-slate-100 rounded-xl pl-10 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all font-mono cursor-pointer appearance-none shadow-sm"
+            >
+              {effectiveDomains.length === 0 ? (
+                <option value="" disabled>
+                  {t('health.noDomainsFound', 'No allowed domains found in OpenSearch')}
+                </option>
+              ) : (
+                effectiveDomains.map((dom) => (
+                  <option key={dom} value={dom} className="bg-slate-900 text-slate-100 font-mono py-1">
+                    {dom}
+                  </option>
+                ))
+              )}
+              {isAdmin && (
+                <option value="__custom__" className="bg-slate-900 text-cyan-400 font-sans font-normal">
+                  + {t('health.customDomain', 'Audit Another Custom Domain...')}
+                </option>
+              )}
+            </select>
+            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
           {/* DKIM Selector input */}
           <div className="md:col-span-3 relative">
             <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
+              id="domain-health-selector-input"
               type="text"
               value={selectorInput}
               onChange={(e) => setSelectorInput(e.target.value)}
@@ -392,9 +483,10 @@ export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDo
           {/* Actions */}
           <div className="md:col-span-3 flex items-center gap-2">
             <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50"
+              type="button"
+              onClick={() => loadData(activeDomain, selectorInput)}
+              disabled={loading || !activeDomain}
+              className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50 h-[42px]"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span>{loading ? t('health.auditing', 'Auditing...') : t('health.runAudit', 'Analyze Domain')}</span>
@@ -404,12 +496,48 @@ export default function DomainHealth({ selectedDomain = 'voxera.net', onSelectDo
               type="button"
               onClick={() => window.print()}
               title="Print / Save PDF Report"
-              className="p-2.5 bg-slate-900 border border-slate-750 hover:border-slate-600 text-slate-300 hover:text-white rounded-xl transition cursor-pointer"
+              className="p-2.5 bg-slate-900 border border-slate-750 hover:border-slate-600 text-slate-300 hover:text-white rounded-xl transition cursor-pointer h-[42px]"
             >
               <Printer className="w-4 h-4" />
             </button>
           </div>
-        </form>
+        </div>
+
+        {/* Custom Domain Input for Admin */}
+        {isAdmin && isCustomMode && (
+          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 pt-2 border-t border-slate-800">
+            <div className="relative flex-1">
+              <Globe className="w-4 h-4 text-cyan-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={domainInput}
+                onChange={(e) => setDomainInput(e.target.value)}
+                placeholder={t('health.enterDomain', 'Enter domain (e.g. example.com)')}
+                className="w-full bg-slate-900/95 border border-slate-700 hover:border-cyan-500/50 focus:border-cyan-500 text-xs text-slate-100 rounded-xl pl-10 pr-4 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                autoFocus
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading || !domainInput.trim()}
+              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-xl transition cursor-pointer disabled:opacity-50"
+            >
+              {t('health.runAudit', 'Analyze Domain')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsCustomMode(false);
+                if (effectiveDomains.length > 0) {
+                  handleDomainSelect(effectiveDomains[0]);
+                }
+              }}
+              className="px-3 py-2 text-xs text-slate-400 hover:text-white transition cursor-pointer"
+            >
+              {t('common.cancel', 'Cancel')}
+            </button>
+          </form>
+        )}
       </section>
 
       {/* Error state */}
