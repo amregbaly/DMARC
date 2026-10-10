@@ -1,0 +1,24 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Database files
+web/server/data/*.db
+web/server/data/*.db-journal
+web/server/data/*.db-wal
+web/server/data/*.db-shm
+
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+web/client/dist
+web/client/.vite
+
+# OS files
+.DS_Store
+Thumbs.db

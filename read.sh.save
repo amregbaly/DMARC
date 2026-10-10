@@ -1,0 +1,6 @@
+export OPENSEARCH_ADMIN_USER="admin"
+export OPENSEARCH_ADMIN_PASSWORD="<admin-password>"
+export DMARC_USER="grafana_dmarc"
+export DMARC_PASSWORD="<choose-a-strong-password>"
+
+./opensearch/setup-opensearch-readonly.sh

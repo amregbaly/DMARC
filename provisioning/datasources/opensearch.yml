@@ -1,0 +1,25 @@
+apiVersion: 1
+
+datasources:
+  - name: OpenSearch DMARC
+    type: grafana-opensearch-datasource
+    uid: opensearch-dmarc
+    access: proxy
+    url: https://172.105.135.195:9200
+    isDefault: false
+    editable: true
+    jsonData:
+      database: dmarc_aggregate-*
+      flavor: opensearch
+      version: "2.11.0"
+      timeField: date_begin
+      interval: Daily
+      logMessageField: ""
+      logLevelField: ""
+      maxConcurrentShardRequests: 5
+      pplEnabled: true
+      tlsSkipVerify: true
+    secureJsonData:
+      basicAuthPassword: ${OPENSEARCH_PASSWORD}
+    basicAuth: true
+    basicAuthUser: ${OPENSEARCH_USER}

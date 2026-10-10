@@ -1,0 +1,23 @@
+{
+  "read_only_role": {
+    "description": "Read-only access to dmarc_aggregate indices for Grafana",
+    "cluster_permissions": [
+      "cluster_composite_ops_ro"
+    ],
+    "index_permissions": [
+      {
+        "index_patterns": [
+          "dmarc_aggregate-*"
+        ],
+        "allowed_actions": [
+          "read",
+          "indices:data/read/*",
+          "indices:admin/mappings/get",
+          "indices:admin/resolve/index",
+          "indices:monitor/settings/get"
+        ]
+      }
+    ],
+    "tenant_permissions": []
+  }
+}

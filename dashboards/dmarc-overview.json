@@ -1,0 +1,4799 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "grafana-opensearch-datasource",
+      "name": "OpenSearch",
+      "version": "2.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "piechart",
+      "name": "Pie chart",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "barchart",
+      "name": "Bar chart",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "state-timeline",
+      "name": "State timeline",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "text",
+      "name": "Text",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Comprehensive DMARC aggregate report analysis. All volume metrics use Sum of message_count (not document count). Fields use .keyword for terms aggregations per the live OpenSearch mapping.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "title": "\ud83d\udcca Overview",
+      "type": "row"
+    },
+    {
+      "id": 1,
+      "title": "Total Emails",
+      "description": "Sum of message_count across all matching records. This is the total volume of emails reported, not the number of DMARC reports.",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "title": "DMARC Pass Rate (%)",
+      "description": "Percentage of emails (by message_count) that passed DMARC. Calculated as: Sum(message_count WHERE passed_dmarc:true) / Sum(message_count) \u00d7 100. Uses two queries and a binary operation transformation. Thresholds: Red <85%, Amber <95%, Green \u226595%.",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "dh_A",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Total"
+        },
+        {
+          "refId": "B",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "2"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "dh_B",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Passed"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "binary": {
+              "left": "B Sum",
+              "operator": "/",
+              "right": "A Sum"
+            },
+            "alias": "Pass Rate",
+            "reduce": {
+              "reducer": "sum"
+            }
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "binary": {
+              "left": "Pass Rate",
+              "operator": "*",
+              "right": "100"
+            },
+            "alias": "Pass Rate %"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 85
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/Pass Rate %/",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "DMARC Failures",
+      "description": "Sum of message_count where passed_dmarc is false. These are emails that failed DMARC evaluation regardless of disposition.",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 3,
+        "x": 8,
+        "y": 1
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Messages Affected (Quarantine/Reject)",
+      "description": "Sum of message_count where disposition is quarantine or reject. These are emails where the receiving server took action based on the DMARC policy.",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 3,
+        "x": 11,
+        "y": 1
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND passed_dmarc:$dmarc_result AND (disposition.keyword:quarantine OR disposition.keyword:reject)",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Domains Monitored",
+      "description": "Unique count of header_from values. This shows how many distinct sender domains appear in the DMARC reports.",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 3,
+        "x": 14,
+        "y": 1
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "cardinality",
+              "field": "header_from.keyword",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "max"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Reports Received",
+      "description": "Unique count of report_id values. Each DMARC aggregate report has a unique report_id from the reporting organization.",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 3,
+        "x": 17,
+        "y": 1
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "cardinality",
+              "field": "report_id.keyword",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Unique Sending IPs",
+      "description": "Unique count of source_ip_address values. Shows how many distinct IP addresses are sending email on behalf of your domain(s).",
+      "type": "stat",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "cardinality",
+              "field": "source_ip_address.keyword",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "max"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 200,
+      "title": "\ud83d\udd10 Authentication & Alignment",
+      "type": "row"
+    },
+    {
+      "id": 10,
+      "title": "SPF Result Distribution",
+      "description": "Pie chart of spf_results.result values weighted by message_count. Shows pass/fail/softfail/neutral/temperror/permerror distribution of SPF checks.",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 5,
+        "x": 0,
+        "y": 7
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "spf_results.result.keyword",
+              "id": "2",
+              "settings": {
+                "size": "10",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pass"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "softfail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "DKIM Result Distribution",
+      "description": "Pie chart of dkim_results.result values weighted by message_count. Shows pass/fail/neutral/etc. distribution of DKIM signature checks.",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 5,
+        "x": 5,
+        "y": 7
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "dkim_results.result.keyword",
+              "id": "2",
+              "settings": {
+                "size": "10",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pass"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "SPF Alignment",
+      "description": "Pie chart showing SPF alignment (spf_aligned true vs false) weighted by message_count. SPF alignment means the SPF-authenticated domain matches the header_from domain.",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 10,
+        "y": 7
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "spf_aligned",
+              "id": "2",
+              "settings": {
+                "size": "2",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "true"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Aligned"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "false"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Not Aligned"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "DKIM Alignment",
+      "description": "Pie chart showing DKIM alignment (dkim_aligned true vs false) weighted by message_count. DKIM alignment means the DKIM-signed domain matches the header_from domain.",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 14,
+        "y": 7
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "dkim_aligned",
+              "id": "2",
+              "settings": {
+                "size": "2",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "true"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Aligned"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "false"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Not Aligned"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Alignment Matrix",
+      "description": "Table showing message volume grouped by SPF alignment \u00d7 DKIM alignment. Each cell is Sum of message_count. Helps identify how many emails rely on SPF-only, DKIM-only, both, or neither alignment.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 7
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "spf_aligned",
+              "id": "2",
+              "settings": {
+                "size": "2",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "dkim_aligned",
+              "id": "3",
+              "settings": {
+                "size": "2",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "spf_aligned"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "SPF Aligned"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dkim_aligned"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "DKIM Aligned"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sum"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Message Count"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "DMARC Disposition Over Time",
+      "description": "Stacked bar chart showing message volume by disposition (none, quarantine, reject) over time. Uses date_begin as the time axis. Each bar segment represents how many emails received each disposition.",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "3",
+              "settings": {
+                "interval": "1d",
+                "min_doc_count": "0",
+                "trimEdges": "0"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "disposition.keyword",
+              "id": "2",
+              "settings": {
+                "size": "5",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 80
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "none"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "quarantine"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reject"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "stacking": "normal",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "orientation": "auto",
+        "xTickLabelRotation": 0,
+        "showValue": "auto"
+      }
+    },
+    {
+      "id": 16,
+      "title": "Authenticated but Not Aligned",
+      "description": "Messages where the underlying auth check passed but the domain did not align with header_from. Formula: (spf_results.result:pass AND spf_aligned:false) OR (dkim_results.result:pass AND dkim_aligned:false). These are typically forwarded or third-party senders using your domain.",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 15
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND ((spf_results.result.keyword:pass AND spf_aligned:false) OR (dkim_results.result.keyword:pass AND dkim_aligned:false))",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#EAB839",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 17,
+      "title": "Auth Method That Saved the Message",
+      "description": "Breakdown of DMARC-passing emails by which authentication method provided alignment: DKIM Only (dkim_aligned:true AND spf_aligned:false), SPF Only (spf_aligned:true AND dkim_aligned:false), Both (both aligned), Neither (passed_dmarc:true but neither aligned \u2014 rare, usually policy overrides).",
+      "type": "piechart",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 15
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true AND dkim_aligned:true AND spf_aligned:true",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "dh_A",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Both"
+        },
+        {
+          "refId": "B",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true AND dkim_aligned:true AND spf_aligned:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "2"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "dh_B",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "DKIM Only"
+        },
+        {
+          "refId": "C",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true AND dkim_aligned:false AND spf_aligned:true",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "3"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "dh_C",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "SPF Only"
+        },
+        {
+          "refId": "D",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true AND dkim_aligned:false AND spf_aligned:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "4"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "dh_D",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Neither (override)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "Auth Method That Saved the Message (Over Time)",
+      "description": "Time series showing which auth method provided DMARC pass over time. Stacked areas for Both/DKIM-only/SPF-only/Neither. Helps track reliance on a single auth mechanism.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true AND dkim_aligned:true AND spf_aligned:true",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "2",
+              "settings": {
+                "interval": "1d",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Both"
+        },
+        {
+          "refId": "B",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true AND dkim_aligned:true AND spf_aligned:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "2"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "3",
+              "settings": {
+                "interval": "1d",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "DKIM Only"
+        },
+        {
+          "refId": "C",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true AND dkim_aligned:false AND spf_aligned:true",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "3"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "4",
+              "settings": {
+                "interval": "1d",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "SPF Only"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 30,
+            "stacking": {
+              "mode": "normal"
+            },
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "id": 300,
+      "title": "\ud83d\udcc8 Traffic Analysis",
+      "type": "row"
+    },
+    {
+      "id": 20,
+      "title": "Messages Over Time (Pass/Fail)",
+      "description": "Time series of Sum(message_count) split by passed_dmarc (true/false). Shows daily email volume and the proportion that passes vs fails DMARC.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "3",
+              "settings": {
+                "interval": "1d",
+                "min_doc_count": "0"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "passed_dmarc",
+              "id": "2",
+              "settings": {
+                "size": "2",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "linear",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal"
+            },
+            "lineWidth": 1
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "true"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "DMARC Pass"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "false"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "DMARC Fail"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "Top Sending IPs (by Volume)",
+      "description": "Top 20 source IPs by total message_count, showing pass and fail counts. Helps identify your highest-volume senders and whether they authenticate properly.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_ip_address.keyword",
+              "id": "2",
+              "settings": {
+                "size": "20",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "passed_dmarc",
+              "id": "3",
+              "settings": {
+                "size": "2",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_ip_address.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Sum",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "Top Header-From Domains",
+      "description": "Bar chart of the top header_from domains by Sum(message_count). Shows which domains are most frequently claimed as the sender in the From header.",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 32
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "header_from.keyword",
+              "id": "2",
+              "settings": {
+                "size": "15",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "legend": {
+          "displayMode": "hidden",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "showValue": "auto"
+      }
+    },
+    {
+      "id": 23,
+      "title": "Top Source Organizations",
+      "description": "Top source organizations by message volume. Uses source_name.keyword field (falls back to source_base_domain.keyword if source_name is missing). Note: source_name is an enrichment field from parsedmarc \u2014 if your data lacks it, this panel may be empty.",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 32
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result AND _exists_:source_name",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_name.keyword",
+              "id": "2",
+              "settings": {
+                "size": "15",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "By source_name"
+        },
+        {
+          "refId": "B",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result AND NOT _exists_:source_name AND _exists_:source_base_domain",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "2"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_base_domain.keyword",
+              "id": "3",
+              "settings": {
+                "size": "15",
+                "order": "desc",
+                "orderBy": "2",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "By source_base_domain (fallback)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "showValue": "auto"
+      }
+    },
+    {
+      "id": 24,
+      "title": "Reporting Organizations",
+      "description": "Top reporting organizations (org_name) by message volume. These are the mail providers (Google, Microsoft, Yahoo, etc.) that sent DMARC aggregate reports. Note: org_name is the REPORTER, not the sender.",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 32
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "org_name.keyword",
+              "id": "2",
+              "settings": {
+                "size": "15",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "legend": {
+          "displayMode": "hidden",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "showValue": "auto"
+      }
+    },
+    {
+      "id": 25,
+      "title": "Country Breakdown",
+      "description": "Message volume by source_country. This is an enrichment field from parsedmarc. If your data does not include source_country, this panel will be empty. Shows where your email traffic originates geographically.",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result AND _exists_:source_country",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_country.keyword",
+              "id": "2",
+              "settings": {
+                "size": "25",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "legend": {
+          "displayMode": "hidden",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "showValue": "auto"
+      }
+    },
+    {
+      "id": 26,
+      "title": "Header-From vs Envelope-From Mismatch",
+      "description": "Raw documents where header_from differs from envelope_from. This can indicate forwarding, mailing lists, or spoofing attempts. Uses a Grafana filter transformation to show only mismatched records.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:$dmarc_result AND NOT envelope_from.keyword:$domain",
+          "metrics": [
+            {
+              "type": "raw_document",
+              "id": "1",
+              "settings": {
+                "size": "100"
+              }
+            }
+          ],
+          "bucketAggs": [],
+          "timeField": "date_begin"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "_source",
+            "format": "json"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "header_from",
+                "envelope_from",
+                "source_ip_address",
+                "message_count",
+                "passed_dmarc",
+                "disposition",
+                "date_begin"
+              ]
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "header_from"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Header From"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "envelope_from"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Envelope From"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_ip_address"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "message_count"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Messages"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Messages",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": [
+            "message_count"
+          ]
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 400,
+      "title": "\ud83d\udee1\ufe0f Security & Threat Intelligence",
+      "type": "row"
+    },
+    {
+      "id": 70,
+      "title": "\ud83c\udf0d Global Attack Origin & Threat Heatmap",
+      "description": "Live interactive global map tracking the geographic origin of unauthenticated / failing emails (passed_dmarc:false). Circles are centered on countries via ISO 3166-1 alpha-2 codes and scaled/colored by attack volume.",
+      "type": "geomap",
+      "gridPos": {
+        "h": 12,
+        "w": 15,
+        "x": 0,
+        "y": 49
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword: AND passed_dmarc:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_country.keyword",
+              "id": "2",
+              "settings": {
+                "size": "100",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "options": {
+        "view": {
+          "id": "zero",
+          "lat": 20,
+          "lon": 0,
+          "zoom": 1.6
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": false,
+          "showScale": false
+        },
+        "basemap": {
+          "type": "default",
+          "config": {
+            "theme": "dark"
+          }
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Threat Origins",
+            "location": {
+              "mode": "lookup",
+              "lookupField": "source_country.keyword",
+              "gazetteer": "countries"
+            },
+            "config": {
+              "showLegend": true,
+              "style": {
+                "size": {
+                  "field": "Sum",
+                  "fixed": 5,
+                  "min": 10,
+                  "max": 38
+                },
+                "color": {
+                  "field": "Sum",
+                  "fixed": "#E02F44",
+                  "mode": "thresholds"
+                },
+                "opacity": 0.85
+              }
+            },
+            "tooltip": true
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#EAB839",
+                "value": null
+              },
+              {
+                "color": "#EF843C",
+                "value": 25
+              },
+              {
+                "color": "#E24D42",
+                "value": 75
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 71,
+      "title": "\ud83c\udff4\u200d\u2620\ufe0f Attacker Geolocation Breakdown",
+      "description": "Top attacking source countries ranked by unauthenticated email volume (passed_dmarc:false).",
+      "type": "bargauge",
+      "gridPos": {
+        "h": 12,
+        "w": 9,
+        "x": 15,
+        "y": 49
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword: AND passed_dmarc:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_country.keyword",
+              "id": "2",
+              "settings": {
+                "size": "15",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#EAB839",
+                "value": null
+              },
+              {
+                "color": "#EF843C",
+                "value": 20
+              },
+              {
+                "color": "#E24D42",
+                "value": 70
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 72,
+      "title": "\ud83c\udfe2 Top Threat Networks (ASNs & ISPs)",
+      "description": "Autonomous Systems (ASNs) and Internet Service Providers originating unauthenticated / spoofed email traffic.",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 0,
+        "y": 61
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword: AND passed_dmarc:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_as_name.keyword",
+              "id": "2",
+              "settings": {
+                "size": "10",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "groupWidth": 0.7,
+        "barWidth": 0.75,
+        "legend": {
+          "displayMode": "hidden",
+          "placement": "bottom",
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#E24D42"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 73,
+      "title": "\ud83d\udee1\ufe0f Attack Containment & Blocking Rate",
+      "description": "Percentage of spoofed / attack emails successfully stopped by policy (quarantine or reject) versus delivered under permissive p=none monitoring. 100% means all attacks are actively blocked.",
+      "type": "gauge",
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 14,
+        "y": 61
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword: AND passed_dmarc:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "dh_A",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Total Attacks"
+        },
+        {
+          "refId": "B",
+          "query": "header_from.keyword: AND passed_dmarc:false AND (disposition.keyword:quarantine OR disposition.keyword:reject)",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "2"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "dh_B",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Blocked Attacks"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "binary": {
+              "left": "B Sum",
+              "operator": "/",
+              "right": "A Sum"
+            },
+            "alias": "Containment"
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "binary": {
+              "left": "Containment",
+              "operator": "*",
+              "right": "100"
+            },
+            "alias": "Containment %"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/Containment %/",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 74,
+      "title": "\ud83d\udea8 SOC Live Threat Feed: Unaligned & Spoofed Traffic",
+      "description": "Real-time forensic event feed of failing DMARC messages. Inspects the source IP, country, network ASN, spoofed header from, envelope from, SPF/DKIM validation details, and applied disposition.",
+      "type": "table",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 69
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword: AND passed_dmarc:false",
+          "metrics": [
+            {
+              "type": "raw_document",
+              "id": "1",
+              "settings": {
+                "size": "50"
+              }
+            }
+          ],
+          "bucketAggs": [],
+          "timeField": "date_begin"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "_source",
+            "format": "json"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "date_begin",
+                "source_country",
+                "source_ip_address",
+                "source_as_name",
+                "header_from",
+                "envelope_from",
+                "spf_results_combined",
+                "dkim_results_combined",
+                "disposition",
+                "message_count"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "date_begin": "Time",
+              "source_country": "Country",
+              "source_ip_address": "Source IP",
+              "source_as_name": "Network / ASN",
+              "header_from": "Header From (Target)",
+              "envelope_from": "Envelope From (Claimed)",
+              "spf_results_combined": "SPF Details",
+              "dkim_results_combined": "DKIM Details",
+              "disposition": "Policy Action",
+              "message_count": "Volume"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Policy Action"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "reject": {
+                        "color": "green",
+                        "text": "Blocked (reject)"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "quarantine": {
+                        "color": "orange",
+                        "text": "Filtered (quarantine)"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "color": "red",
+                        "text": "Leaked (none)"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "fields": [
+            "Volume"
+          ]
+        }
+      }
+    },
+    {
+      "id": 30,
+      "title": "DMARC Failures by IP",
+      "description": "Table of IPs that failed DMARC, with source organization, header_from domain, failed message count, SPF result, DKIM result, and disposition. Sorted by failed message volume.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 78
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND passed_dmarc:false",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_ip_address.keyword",
+              "id": "2",
+              "settings": {
+                "size": "50",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "source_name.keyword",
+              "id": "6",
+              "settings": {
+                "size": "1",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "0"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "header_from.keyword",
+              "id": "3",
+              "settings": {
+                "size": "5",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "disposition.keyword",
+              "id": "5",
+              "settings": {
+                "size": "3",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_ip_address.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_name.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source Org"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "header_from.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Header From"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "disposition.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Disposition"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sum"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Failed Messages"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Failed Messages",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
+        }
+      }
+    },
+    {
+      "id": 31,
+      "title": "Unauthorized Senders (not in allowlist)",
+      "description": "DMARC failures from IPs NOT in the known_ips allowlist variable. This helps identify potentially unauthorized senders spoofing your domain. Maintain the allowlist via the 'known_ips' dashboard variable (comma-separated IPs).",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 78
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND passed_dmarc:false AND NOT source_ip_address.keyword:($known_ips)",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_ip_address.keyword",
+              "id": "2",
+              "settings": {
+                "size": "30",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "source_name.keyword",
+              "id": "5",
+              "settings": {
+                "size": "1",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "0"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "header_from.keyword",
+              "id": "3",
+              "settings": {
+                "size": "3",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "source_country.keyword",
+              "id": "4",
+              "settings": {
+                "size": "1",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_ip_address.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_name.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source Org"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "header_from.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Header From"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_country.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Country"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sum"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Failed Messages"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Failed Messages",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
+        }
+      }
+    },
+    {
+      "id": 32,
+      "title": "SPF Failures: Top IPs & Domains",
+      "description": "Top IPs and domains with spf_results.result = fail. These senders claim to send on behalf of a domain but fail SPF validation.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 86
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND spf_results.result.keyword:fail",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_ip_address.keyword",
+              "id": "2",
+              "settings": {
+                "size": "20",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "header_from.keyword",
+              "id": "3",
+              "settings": {
+                "size": "5",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_ip_address.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "header_from.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Claimed Domain"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sum"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "SPF-Fail Messages"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "SPF-Fail Messages",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
+        }
+      }
+    },
+    {
+      "id": 33,
+      "title": "DKIM Failures: Top IPs & Domains",
+      "description": "Top IPs and domains with dkim_results.result = fail. These senders either do not sign with DKIM or their signatures fail validation.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 86
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND dkim_results.result.keyword:fail",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_ip_address.keyword",
+              "id": "2",
+              "settings": {
+                "size": "20",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "header_from.keyword",
+              "id": "3",
+              "settings": {
+                "size": "5",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_ip_address.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "header_from.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Claimed Domain"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sum"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "DKIM-Fail Messages"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "DKIM-Fail Messages",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
+        }
+      }
+    },
+    {
+      "id": 34,
+      "title": "Quarantine & Reject Events Over Time",
+      "description": "Time series of messages receiving quarantine or reject disposition. Spikes may indicate ongoing spoofing campaigns against your domain.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 94
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND (disposition.keyword:quarantine OR disposition.keyword:reject)",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "3",
+              "settings": {
+                "interval": "1d",
+                "min_doc_count": "0"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "disposition.keyword",
+              "id": "2",
+              "settings": {
+                "size": "3",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal"
+            },
+            "lineWidth": 1
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "quarantine"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reject"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 35,
+      "title": "Spoofing Suspects",
+      "description": "DMARC failures from IPs not in the known_ips allowlist, sorted by message volume. These are the most likely spoofing attempts. Combine with country data and reverse DNS to assess risk.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 94
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND passed_dmarc:false AND NOT source_ip_address.keyword:($known_ips)",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "source_ip_address.keyword",
+              "id": "2",
+              "settings": {
+                "size": "20",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "source_name.keyword",
+              "id": "5",
+              "settings": {
+                "size": "1",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "0"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "header_from.keyword",
+              "id": "3",
+              "settings": {
+                "size": "3",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "source_country.keyword",
+              "id": "4",
+              "settings": {
+                "size": "1",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "0"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "disposition.keyword",
+              "id": "6",
+              "settings": {
+                "size": "3",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_ip_address.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Suspect IP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_name.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source Org"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "header_from.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Spoofed Domain"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source_country.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Country"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "disposition.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Disposition"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sum"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Spoofed Messages"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Spoofed Messages",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 102
+      },
+      "id": 500,
+      "title": "\ud83d\udccb Policy & Enforcement Readiness",
+      "type": "row"
+    },
+    {
+      "id": 40,
+      "title": "Published DMARC Policies",
+      "description": "Table of published DMARC policies per domain, showing policy (p), subdomain policy (sp), percentage (pct), DKIM alignment mode (adkim), and SPF alignment mode (aspf). Deduplicated by domain using Group By transformation.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 103
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org",
+          "metrics": [
+            {
+              "type": "raw_document",
+              "id": "1",
+              "settings": {
+                "size": "500"
+              }
+            }
+          ],
+          "bucketAggs": [],
+          "timeField": "date_begin"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "_source",
+            "format": "json"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "published_policy.domain",
+                "published_policy.p",
+                "published_policy.sp",
+                "published_policy.pct",
+                "published_policy.adkim",
+                "published_policy.aspf"
+              ]
+            }
+          }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "published_policy.domain": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "published_policy.p": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "published_policy.sp": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "published_policy.pct": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "published_policy.adkim": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "published_policy.aspf": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "published_policy.domain"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Domain"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "published_policy.p (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Policy (p)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "published_policy.sp (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Subdomain Policy (sp)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "published_policy.pct (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Percentage (pct)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "published_policy.adkim (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "DKIM Alignment (adkim)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "published_policy.aspf (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "SPF Alignment (aspf)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 41,
+      "title": "Policy Over Time (State Timeline)",
+      "description": "State timeline showing the published DMARC policy (p) for each domain over time. Useful for tracking when policies change from 'none' to 'quarantine' or 'reject'.",
+      "type": "state-timeline",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 103
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org",
+          "metrics": [
+            {
+              "type": "raw_document",
+              "id": "1",
+              "settings": {
+                "size": "500"
+              }
+            }
+          ],
+          "bucketAggs": [],
+          "timeField": "date_begin"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "_source",
+            "format": "json"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "date_begin",
+                "published_policy.domain",
+                "published_policy.p"
+              ]
+            }
+          }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "date_begin": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "published_policy.domain": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "published_policy.p": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "none": {
+                  "color": "red",
+                  "text": "none",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "quarantine": {
+                  "color": "yellow",
+                  "text": "quarantine",
+                  "index": 1
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "reject": {
+                  "color": "green",
+                  "text": "reject",
+                  "index": 2
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "rowHeight": 0.8,
+        "mergeValues": true,
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 42,
+      "title": "Enforcement Readiness (% Passing)",
+      "description": "Overall DMARC pass rate for the selected time range. If this stays above 98% for 30+ days, it strongly suggests the domain policy can be tightened from 'none' \u2192 'quarantine' or 'quarantine' \u2192 'reject'. Use the date picker to check a 30-day window.",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 111
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "dh_A",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Total"
+        },
+        {
+          "refId": "B",
+          "query": "header_from.keyword:$domain AND source_ip_address.keyword:$source_ip AND org_name.keyword:$org AND disposition.keyword:$disposition AND passed_dmarc:true",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "2"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "dh_B",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin",
+          "alias": "Passed"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "binary": {
+              "left": "B Sum",
+              "operator": "/",
+              "right": "A Sum"
+            },
+            "alias": "Pass Rate"
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "binary": {
+              "left": "Pass Rate",
+              "operator": "*",
+              "right": "100"
+            },
+            "alias": "Enforcement Readiness %"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 98
+              }
+            ]
+          },
+          "unit": "percent",
+          "decimals": 2,
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/Enforcement Readiness %/",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 43,
+      "title": "Would-Be Impact (reject simulation)",
+      "description": "Messages that WOULD be rejected if the domain policy were p=reject. These are records where passed_dmarc:false AND disposition:none (meaning the current policy let them through). If this number is high, tightening policy would affect this many messages.",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 111
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND passed_dmarc:false AND disposition.keyword:none",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "date_begin",
+              "settings": {
+                "interval": "auto",
+                "min_doc_count": 0,
+                "trimEdges": 0
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 44,
+      "title": "Would-Be Impact Over Time",
+      "description": "Time series of messages that would be rejected under p=reject (passed_dmarc:false AND disposition:none). Helps visualize the trend before tightening policy.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 111
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org AND passed_dmarc:false AND disposition.keyword:none",
+          "metrics": [
+            {
+              "type": "sum",
+              "field": "message_count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "2",
+              "settings": {
+                "interval": "1d",
+                "min_doc_count": "0"
+              }
+            },
+            {
+              "type": "terms",
+              "field": "header_from.keyword",
+              "id": "3",
+              "settings": {
+                "size": "10",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal"
+            },
+            "lineWidth": 1
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 45,
+      "title": "Enforcement Readiness Note",
+      "description": "Guidance and pass rate thresholds for progressing DMARC policy towards enforcement (p=quarantine, p=reject).",
+      "type": "text",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 115
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Enforcement Readiness Guide\n\n| Pass Rate | Recommendation |\n|-----------|----------------|\n| **\u226598%** for 30 days | \u2705 Safe to move to `p=reject` |\n| **95\u201398%** | \u26a0\ufe0f Investigate remaining failures before tightening |\n| **90\u201395%** | \ud83d\udd0d Address auth issues with known senders |\n| **<90%** | \u274c Significant auth gaps \u2014 do not tighten policy |\n\nCheck the **Would-Be Impact** panel to see how many messages would be affected."
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 119
+      },
+      "id": 600,
+      "title": "\ud83d\udd27 Data Health & Diagnostics",
+      "type": "row"
+    },
+    {
+      "id": 50,
+      "title": "Reports Per Day",
+      "description": "Number of DMARC aggregate report records indexed per day. A sudden drop may indicate a data pipeline issue or a reporting organization going silent.",
+      "type": "barchart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 120
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "header_from.keyword:$domain AND org_name.keyword:$org",
+          "metrics": [
+            {
+              "type": "count",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "date_histogram",
+              "field": "date_begin",
+              "id": "2",
+              "settings": {
+                "interval": "1d",
+                "min_doc_count": "0"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "legend": {
+          "displayMode": "hidden",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "showValue": "auto"
+      }
+    },
+    {
+      "id": 51,
+      "title": "Last Report Per Reporting Organization",
+      "description": "Shows the most recent date_end per reporting organization (org_name). If a major reporter like google.com or microsoft.com has not reported recently, investigate the data pipeline.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 120
+      },
+      "datasource": {
+        "type": "grafana-opensearch-datasource",
+        "uid": "opensearch-dmarc"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "*",
+          "metrics": [
+            {
+              "type": "max",
+              "field": "date_end",
+              "id": "1"
+            }
+          ],
+          "bucketAggs": [
+            {
+              "type": "terms",
+              "field": "org_name.keyword",
+              "id": "2",
+              "settings": {
+                "size": "50",
+                "order": "desc",
+                "orderBy": "1",
+                "min_doc_count": "1"
+              }
+            }
+          ],
+          "timeField": "date_begin"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "org_name.keyword"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reporting Organization"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Max"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Last Report (date_end)"
+              },
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Last Report (date_end)",
+            "desc": true
+          }
+        ]
+      }
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "dmarc",
+    "email-security",
+    "opensearch"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "domain",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "opensearch-dmarc"
+        },
+        "query": "{\"find\":\"terms\",\"field\":\"header_from.keyword\",\"size\":100}",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": "*",
+        "multi": true,
+        "sort": 1,
+        "label": "Domain (header_from)",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "source_ip",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "opensearch-dmarc"
+        },
+        "query": "{\"find\":\"terms\",\"field\":\"source_ip_address.keyword\",\"size\":200}",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": "*",
+        "multi": true,
+        "sort": 1,
+        "label": "Source IP",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "org",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "opensearch-dmarc"
+        },
+        "query": "{\"find\":\"terms\",\"field\":\"org_name.keyword\",\"size\":100}",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": "*",
+        "multi": true,
+        "sort": 1,
+        "label": "Reporting Organization",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "source_org",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "opensearch-dmarc"
+        },
+        "query": "{\"find\":\"terms\",\"field\":\"source_name.keyword\",\"size\":100}",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": "*",
+        "multi": true,
+        "sort": 1,
+        "label": "Source Organization",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "disposition",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "opensearch-dmarc"
+        },
+        "query": "{\"find\":\"terms\",\"field\":\"disposition.keyword\"}",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": "*",
+        "multi": true,
+        "sort": 1,
+        "label": "Disposition",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "dmarc_result",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "opensearch-dmarc"
+        },
+        "query": "{\"find\":\"terms\",\"field\":\"passed_dmarc\"}",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": "*",
+        "multi": true,
+        "sort": 1,
+        "label": "DMARC Result",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "known_ips",
+        "type": "textbox",
+        "label": "Known IPs (allowlist, space-separated for Lucene OR)",
+        "description": "Space-separated list of known/authorized sending IPs. Used by the 'Unauthorized Senders' and 'Spoofing Suspects' panels. Example: 209.85.220.41 40.107.22.100 192.0.2.50",
+        "query": "209.85.220.41 40.107.22.100 192.0.2.50 185.70.40.5 192.168.1.100 10.0.0.50",
+        "current": {
+          "selected": false,
+          "text": "209.85.220.41 40.107.22.100 192.0.2.50 185.70.40.5 192.168.1.100 10.0.0.50",
+          "value": "209.85.220.41 40.107.22.100 192.0.2.50 185.70.40.5 192.168.1.100 10.0.0.50"
+        }
+      },
+      {
+        "name": "adhoc",
+        "type": "adhoc",
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "opensearch-dmarc"
+        },
+        "label": "Ad-hoc Filters"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
+  "timezone": "utc",
+  "title": "DMARC Aggregate Analysis",
+  "uid": "dmarc-overview",
+  "version": 1
+}
