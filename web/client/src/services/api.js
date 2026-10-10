@@ -3,21 +3,43 @@ const BASE_URL = '/api';
 
 const TOKEN_KEY = 'sentinel_auth_token';
 
+export function syncAuthCookie(token) {
+  if (typeof document !== 'undefined') {
+    if (token) {
+      document.cookie = `auth_token=${encodeURIComponent(token)}; path=/; max-age=604800; SameSite=Lax`;
+    } else {
+      document.cookie = `auth_token=; path=/; max-age=0; SameSite=Lax`;
+    }
+  }
+}
+
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    syncAuthCookie(token);
+  }
+  return token;
 }
 
 export function setToken(token) {
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
+    syncAuthCookie(token);
   } else {
     localStorage.removeItem(TOKEN_KEY);
+    syncAuthCookie(null);
   }
 }
 
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  syncAuthCookie(null);
   window.dispatchEvent(new CustomEvent('auth:logout'));
+}
+
+// Ensure cookie is synchronized on initial script load
+if (typeof window !== 'undefined') {
+  syncAuthCookie(localStorage.getItem(TOKEN_KEY));
 }
 
 async function authFetch(url, options = {}) {

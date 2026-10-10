@@ -218,6 +218,12 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const token = generateToken(user);
+    res.cookie('auth_token', token, {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
     res.json({
       token,
       user: {
@@ -236,6 +242,18 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Current user profile
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  if (req.user) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : req.query?.token;
+    if (token) {
+      res.cookie('auth_token', token, {
+        httpOnly: false,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000
+      });
+    }
+  }
   res.json({ user: req.user });
 });
 
