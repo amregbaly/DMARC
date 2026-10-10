@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
+import TopBar from './components/TopBar';
 import KPIGrid from './components/KPIGrid';
 import AlignmentCharts from './components/AlignmentCharts';
 import VolumeTrends from './components/VolumeTrends';
@@ -31,6 +32,7 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
   const { t } = useLanguage();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [domains, setDomains] = useState([]);
@@ -107,8 +109,6 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
       setAlignment(alignmentRes);
       setTimeseries(timeseriesRes);
       setTraffic(trafficRes);
-      setTimeseries(timeseriesRes);
-      setTraffic(trafficRes);
       setThreats(threatsRes);
       setPolicies(policiesRes);
     } catch (err) {
@@ -120,9 +120,9 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
-      {/* Top Navbar */}
-      <Navbar
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
+      {/* Left Sidebar Navigation (Horizontal item rows on the left) */}
+      <Sidebar
         domains={domains}
         selectedDomain={selectedDomain}
         onSelectDomain={setSelectedDomain}
@@ -134,10 +134,29 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
         onLogout={onLogout}
         onChangePasswordClick={() => setIsPasswordModalOpen(true)}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Main Content Area on the Right */}
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-64 xl:pl-72 min-h-screen">
+        {/* Top Header Bar */}
+        <TopBar
+          domains={domains}
+          selectedDomain={selectedDomain}
+          onSelectDomain={setSelectedDomain}
+          activeTab={activeTab}
+          onRefresh={loadDashboardData}
+          isLoading={loading}
+          currentUser={currentUser}
+          onLogout={onLogout}
+          onChangePasswordClick={() => setIsPasswordModalOpen(true)}
+          onOpenProfileModal={() => setIsProfileModalOpen(true)}
+          onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
+        />
+
+        {/* Main Container */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Error Alert */}
         {error && (
           <div className="glass-panel border-rose-500/30 bg-rose-500/10 p-4 rounded-2xl flex items-center justify-between text-rose-300 text-xs">
@@ -239,9 +258,10 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
           </div>
         </div>
       </footer>
+    </div>
 
-      {/* Modals */}
-      <UserProfileModal
+    {/* Modals */}
+    <UserProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         currentUser={currentUser}

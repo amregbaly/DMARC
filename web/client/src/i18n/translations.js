@@ -25,7 +25,10 @@ export const translations = {
       roleViewer: 'Viewer',
       language: 'Language',
       switchLanguage: 'Switch to Spanish (Español)',
-      languageName: 'English'
+      languageName: 'English',
+      navigation: 'Navigation',
+      monitoredDomain: 'Monitored Scope',
+      systemControls: 'System Controls'
     },
 
     // User Profile Modal
@@ -332,7 +335,10 @@ export const translations = {
       roleViewer: 'Espectador',
       language: 'Idioma',
       switchLanguage: 'Cambiar a Inglés (English)',
-      languageName: 'Español'
+      languageName: 'Español',
+      navigation: 'Navegación',
+      monitoredDomain: 'Ámbito Monitoreado',
+      systemControls: 'Controles del Sistema'
     },
 
     // User Profile Modal
