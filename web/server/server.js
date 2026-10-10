@@ -2045,6 +2045,254 @@ app.get('/api/domain-health', authenticateToken, enforceDomainAccess, async (req
 // REPORT GENERATOR & EXPORT ROUTES
 // ==========================================
 
+// PowerDMARC Multi-View Aggregate Analytics Endpoint (Per Source, Per Result, Per Org, Per Host, Geo Threats)
+app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const filterQuery = buildFilterQuery(req.query, req.allowedDomains);
+
+    const query = {
+      size: 0,
+      query: filterQuery,
+      aggs: {
+        total_volume: { sum: { field: 'message_count' } },
+        passed_volume: {
+          filter: { term: { passed_dmarc: true } },
+          aggs: { vol: { sum: { field: 'message_count' } } }
+        },
+        failed_volume: {
+          filter: { term: { passed_dmarc: false } },
+          aggs: { vol: { sum: { field: 'message_count' } } }
+        },
+        quarantined: {
+          filter: { term: { 'disposition.keyword': 'quarantine' } },
+          aggs: { vol: { sum: { field: 'message_count' } } }
+        },
+        rejected: {
+          filter: { term: { 'disposition.keyword': 'reject' } },
+          aggs: { vol: { sum: { field: 'message_count' } } }
+        },
+        forwarded: {
+          filter: {
+            bool: {
+              must: [
+                { term: { spf_aligned: false } },
+                { term: { dkim_aligned: true } }
+              ]
+            }
+          },
+          aggs: { vol: { sum: { field: 'message_count' } } }
+        },
+        sources: {
+          terms: { field: 'source_name.keyword', size: 50 },
+          aggs: {
+            total_vol: { sum: { field: 'message_count' } },
+            passed_vol: {
+              filter: { term: { passed_dmarc: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            spf_vol: {
+              filter: { term: { spf_aligned: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            dkim_vol: {
+              filter: { term: { dkim_aligned: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            source_type: { terms: { field: 'source_type.keyword', size: 1 } },
+            base_domain: { terms: { field: 'source_base_domain.keyword', size: 1 } },
+            as_name: { terms: { field: 'source_as_name.keyword', size: 1 } },
+            dispositions: {
+              terms: { field: 'disposition.keyword', size: 5 },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            }
+          }
+        },
+        organizations: {
+          terms: { field: 'org_name.keyword', size: 50 },
+          aggs: {
+            total_vol: { sum: { field: 'message_count' } },
+            passed_vol: {
+              filter: { term: { passed_dmarc: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            dispositions: {
+              terms: { field: 'disposition.keyword', size: 5 },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            unique_ips: {
+              cardinality: { field: 'source_ip_address.keyword' }
+            }
+          }
+        },
+        hosts: {
+          terms: { field: 'source_ip_address.keyword', size: 100 },
+          aggs: {
+            total_vol: { sum: { field: 'message_count' } },
+            passed_vol: {
+              filter: { term: { passed_dmarc: true } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            },
+            ptr: { terms: { field: 'source_reverse_dns.keyword', size: 1 } },
+            country: { terms: { field: 'source_country.keyword', size: 1 } },
+            as_name: { terms: { field: 'source_as_name.keyword', size: 1 } },
+            source_name: { terms: { field: 'source_name.keyword', size: 1 } },
+            spf_pass: { filter: { term: { spf_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            dkim_pass: { filter: { term: { dkim_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            disposition: { terms: { field: 'disposition.keyword', size: 1 } }
+          }
+        },
+        countries: {
+          terms: { field: 'source_country.keyword', size: 50 },
+          aggs: {
+            total_vol: { sum: { field: 'message_count' } },
+            threat_vol: {
+              filter: { term: { passed_dmarc: false } },
+              aggs: { vol: { sum: { field: 'message_count' } } }
+            }
+          }
+        }
+      }
+    };
+
+    const data = await queryOpenSearch('_search', query);
+    const aggs = data.aggregations || {};
+
+    const totalVolume = aggs.total_volume?.value || 0;
+    const passedVolume = aggs.passed_volume?.vol?.value || 0;
+    const failedVolume = aggs.failed_volume?.vol?.value || 0;
+    const quarantined = aggs.quarantined?.vol?.value || 0;
+    const rejected = aggs.rejected?.vol?.value || 0;
+    const forwarded = aggs.forwarded?.vol?.value || 0;
+    const threatVolume = quarantined + rejected;
+    const nonCompliant = Math.max(0, failedVolume - threatVolume);
+    const complianceRate = totalVolume > 0 ? Number(((passedVolume / totalVolume) * 100).toFixed(1)) : 100.0;
+
+    // Process Sources
+    const sources = (aggs.sources?.buckets || []).map(b => {
+      const vol = b.total_vol?.value || 0;
+      const pass = b.passed_vol?.vol?.value || 0;
+      const spf = b.spf_vol?.vol?.value || 0;
+      const dkim = b.dkim_vol?.vol?.value || 0;
+      const srcType = b.source_type?.buckets?.[0]?.key || 'Unknown';
+      const baseDom = b.base_domain?.buckets?.[0]?.key || '';
+      const asName = b.as_name?.buckets?.[0]?.key || '';
+      const disps = {};
+      (b.dispositions?.buckets || []).forEach(d => {
+        disps[d.key] = d.vol?.value || 0;
+      });
+
+      return {
+        sourceName: b.key || 'Unknown Source',
+        sourceType: srcType,
+        baseDomain: baseDom,
+        asName: asName,
+        totalVolume: vol,
+        compliantVolume: pass,
+        complianceRate: vol > 0 ? Number(((pass / vol) * 100).toFixed(1)) : 0,
+        spfAlignedVolume: spf,
+        dkimAlignedVolume: dkim,
+        dispositions: disps,
+        status: vol > 0 && pass === vol ? 'fully_compliant' : pass > 0 ? 'partially_compliant' : 'non_compliant'
+      };
+    });
+
+    // Process Organizations
+    const organizations = (aggs.organizations?.buckets || []).map(b => {
+      const vol = b.total_vol?.value || 0;
+      const pass = b.passed_vol?.vol?.value || 0;
+      const disps = {};
+      (b.dispositions?.buckets || []).forEach(d => {
+        disps[d.key] = d.vol?.value || 0;
+      });
+
+      return {
+        orgName: b.key,
+        totalVolume: vol,
+        passedVolume: pass,
+        complianceRate: vol > 0 ? Number(((pass / vol) * 100).toFixed(1)) : 0,
+        uniqueIps: b.unique_ips?.value || 0,
+        dispositions: disps
+      };
+    });
+
+    // Process Hosts
+    const hosts = (aggs.hosts?.buckets || []).map(b => {
+      const vol = b.total_vol?.value || 0;
+      const pass = b.passed_vol?.vol?.value || 0;
+      return {
+        ip: b.key,
+        totalVolume: vol,
+        passedVolume: pass,
+        failedVolume: Math.max(0, vol - pass),
+        complianceRate: vol > 0 ? Number(((pass / vol) * 100).toFixed(1)) : 0,
+        ptr: b.ptr?.buckets?.[0]?.key || 'No PTR record',
+        country: b.country?.buckets?.[0]?.key || 'Unknown',
+        asName: b.as_name?.buckets?.[0]?.key || '',
+        sourceName: b.source_name?.buckets?.[0]?.key || '',
+        spfAligned: (b.spf_pass?.vol?.value || 0) > 0,
+        dkimAligned: (b.dkim_pass?.vol?.value || 0) > 0,
+        disposition: b.disposition?.buckets?.[0]?.key || 'none'
+      };
+    });
+
+    // Process Geo Threats
+    const geoThreats = (aggs.countries?.buckets || []).map(b => {
+      const vol = b.total_vol?.value || 0;
+      const threat = b.threat_vol?.vol?.value || 0;
+      return {
+        country: b.key,
+        totalVolume: vol,
+        threatVolume: threat,
+        threatRate: vol > 0 ? Number(((threat / vol) * 100).toFixed(1)) : 0
+      };
+    });
+
+    res.json({
+      summary: {
+        totalVolume,
+        passedVolume,
+        failedVolume,
+        compliantVolume: passedVolume,
+        nonCompliantVolume: nonCompliant,
+        forwardedVolume: forwarded,
+        quarantinedVolume: quarantined,
+        rejectedVolume: rejected,
+        threatVolume: threatVolume,
+        complianceRate
+      },
+      resultsBreakdown: {
+        compliant: {
+          count: passedVolume,
+          pct: totalVolume > 0 ? Number(((passedVolume / totalVolume) * 100).toFixed(1)) : 0,
+          label: 'DMARC Compliant'
+        },
+        nonCompliant: {
+          count: nonCompliant,
+          pct: totalVolume > 0 ? Number(((nonCompliant / totalVolume) * 100).toFixed(1)) : 0,
+          label: 'Non-Compliant (Failed Alignment)'
+        },
+        forwarded: {
+          count: forwarded,
+          pct: totalVolume > 0 ? Number(((forwarded / totalVolume) * 100).toFixed(1)) : 0,
+          label: 'Forwarded / Indirect Flow'
+        },
+        threats: {
+          count: threatVolume,
+          pct: totalVolume > 0 ? Number(((threatVolume / totalVolume) * 100).toFixed(1)) : 0,
+          label: 'Threats / Spoofing Blocked'
+        }
+      },
+      sources,
+      organizations,
+      hosts,
+      geoThreats
+    });
+  } catch (err) {
+    console.error('Error in /api/reports/aggregate-views:', err);
+    res.status(500).json({ error: 'Failed to retrieve aggregate report views.' });
+  }
+});
+
 // 1. List Templates
 app.get('/api/reports/templates', authenticateToken, async (req, res) => {
   try {
@@ -2294,6 +2542,96 @@ app.post('/api/reports/schedules', authenticateToken, requireRole('admin', 'mana
     res.json({ status: 'created', schedule: created });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create schedule.' });
+  }
+});
+
+app.post('/api/reports/schedules/:id/run', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const schedule = db.getReportScheduleById(req.params.id);
+    if (!schedule) {
+      return res.status(404).json({ error: 'Schedule not found' });
+    }
+
+    // RBAC check: non-admin can only run their own schedules
+    if (req.user.role !== 'admin' && schedule.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied to this schedule.' });
+    }
+
+    // RBAC domain check
+    if (schedule.domain !== 'all' && !hasDomainAccess(req.user, schedule.domain)) {
+      return res.status(403).json({ error: `Access denied to schedule domain: ${schedule.domain}` });
+    }
+
+    const scriptPath = path.join(__dirname, '../../reporting/report_service.py');
+    const safeFormats = schedule.formats && schedule.formats.length > 0 ? schedule.formats : ['pdf'];
+    const args = [
+      scriptPath,
+      '--domain', schedule.domain,
+      '--template', schedule.template_id || 'default',
+      '--formats', safeFormats.join(',')
+    ];
+
+    if (req.user.organization_name) {
+      args.push('--client-org', req.user.organization_name.trim());
+    }
+    if (req.user.username) {
+      args.push('--user-logon', req.user.username.trim());
+    }
+    if (req.user.logo_url) {
+      args.push('--logo', req.user.logo_url.trim());
+    }
+    const reportLang = (req.user.language || 'en').trim().toLowerCase();
+    if (['en', 'es'].includes(reportLang)) {
+      args.push('--language', reportLang);
+    }
+    if (schedule.domain === 'all' && req.user.role !== 'admin' && Array.isArray(req.user.domains) && req.user.domains.length > 0) {
+      args.push('--allowed-domains', req.user.domains.join(','));
+    }
+
+    execFile('python3', args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('Schedule report run error:', error, stderr);
+        return res.status(500).json({ error: 'Failed to execute scheduled report generation.' });
+      }
+
+      try {
+        const result = JSON.parse(stdout.trim());
+        const reportId = crypto.randomUUID();
+        const now = new Date().toISOString();
+
+        // Add to history
+        db.addReportHistory({
+          id: reportId,
+          userId: req.user.id,
+          username: req.user.username,
+          domain: schedule.domain,
+          templateId: schedule.template_id,
+          templateName: result.template || schedule.template_id,
+          formats: safeFormats,
+          status: 'completed',
+          files: result.files || {},
+          summaryJson: result.summary || {}
+        });
+
+        // Update schedule last_run_at
+        db.updateReportScheduleLastRun(schedule.id, now);
+
+        res.json({
+          status: 'success',
+          message: `Scheduled report executed and sent to ${schedule.recipients}`,
+          schedule_id: schedule.id,
+          last_run_at: now,
+          report_id: reportId,
+          ...result
+        });
+      } catch (parseErr) {
+        console.error('Failed to parse schedule report output:', parseErr, stdout);
+        res.status(500).json({ error: 'Scheduled report output parsing error.' });
+      }
+    });
+  } catch (err) {
+    console.error('Run schedule endpoint error:', err);
+    res.status(500).json({ error: 'Failed to run schedule.' });
   }
 });
 

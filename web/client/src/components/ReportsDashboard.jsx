@@ -22,7 +22,9 @@ import {
   Building2,
   User,
   Image,
-  Save
+  Save,
+  Layers,
+  Play
 } from 'lucide-react';
 import {
   fetchReportTemplates,
@@ -32,16 +34,18 @@ import {
   fetchReportHistory,
   fetchReportSchedules,
   createReportSchedule,
+  runReportSchedule,
   deleteReportSchedule,
   getDownloadReportUrl,
   downloadReportFile,
   updateProfile
 } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import AggregateReportsView from './AggregateReportsView';
 
 export default function ReportsDashboard({ domains = [], selectedDomain, onSelectDomain, currentUser }) {
   const { language, t } = useLanguage();
-  const [activeSubTab, setActiveSubTab] = useState('generate'); // 'generate' | 'templates' | 'history' | 'schedules'
+  const [activeSubTab, setActiveSubTab] = useState('aggregate'); // 'aggregate' | 'generate' | 'templates' | 'history' | 'schedules'
   
   // State: Templates
   const [templates, setTemplates] = useState([]);
@@ -73,6 +77,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
     recipients: '',
     formats: ['pdf', 'xlsx']
   });
+  const [runningScheduleId, setRunningScheduleId] = useState(null);
 
   // State: Template Editor Modal
   const [editingTemplate, setEditingTemplate] = useState(null);
@@ -275,6 +280,20 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
     }
   }
 
+  async function handleRunSchedule(id) {
+    setRunningScheduleId(id);
+    try {
+      const res = await runReportSchedule(id);
+      alert(`Report executed successfully! Generated for ${res.domain || 'all'}. You can download it now in Report History.`);
+      await loadSchedules();
+      await loadHistory();
+    } catch (err) {
+      alert('Error executing schedule: ' + err.message);
+    } finally {
+      setRunningScheduleId(null);
+    }
+  }
+
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
 
   return (
@@ -302,6 +321,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
         {/* Sub Navigation Tabs */}
         <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t border-slate-800/80">
           {[
+            { id: 'aggregate', label: t('reports.aggregateTab', 'Aggregate Views (PowerDMARC)'), icon: Layers },
             { id: 'generate', label: t('reports.generateTab', 'Generate Report'), icon: FileText },
             { id: 'templates', label: t('reports.brandingTab', 'Branding & Templates'), icon: Palette },
             { id: 'history', label: t('reports.historyTab', 'Report History'), icon: Clock },
@@ -331,6 +351,22 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
           })}
         </div>
       </div>
+
+      {/* ======================================================== */}
+      {/* 0. POWERDMARC MULTI-VIEW AGGREGATE REPORTS TAB */}
+      {/* ======================================================== */}
+      {activeSubTab === 'aggregate' && (
+        <AggregateReportsView
+          domains={domains}
+          selectedDomain={reportDomain}
+          currentUser={currentUser}
+          onSwitchToGenerate={({ domain, preset }) => {
+            if (domain) setReportDomain(domain);
+            if (preset) setDatePreset(preset);
+            setActiveSubTab('generate');
+          }}
+        />
+      )}
 
       {/* ======================================================== */}
       {/* 1. GENERATE REPORT TAB */}
@@ -1200,15 +1236,29 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                       <div className="text-[11px] text-slate-400 mt-1">
                         Domain: <strong className="text-slate-200">{sc.domain}</strong> | Recipients: <strong className="text-slate-200">{sc.recipients}</strong>
                       </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                        {sc.last_run_at ? `Last executed: ${new Date(sc.last_run_at).toLocaleString()}` : 'Status: Standing schedule (pending run)'}
+                      </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDeleteSchedule(sc.id)}
-                      className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
-                      title="Delete Schedule"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRunSchedule(sc.id)}
+                        disabled={runningScheduleId === sc.id}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        title="Execute this report schedule immediately"
+                      >
+                        <Play className={`w-3.5 h-3.5 ${runningScheduleId === sc.id ? 'animate-spin' : ''}`} />
+                        <span>{runningScheduleId === sc.id ? 'Executing...' : 'Run Now'}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSchedule(sc.id)}
+                        className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
+                        title="Delete Schedule"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

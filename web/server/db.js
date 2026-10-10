@@ -87,6 +87,9 @@ export function initDb() {
   try {
     db.prepare("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'en'").run();
   } catch (e) {}
+  try {
+    db.prepare('ALTER TABLE reports_schedules ADD COLUMN last_run_at TEXT').run();
+  } catch (e) {}
 
   // Ensure initial admin exists if user table is brand new
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
@@ -386,6 +389,19 @@ export function getReportSchedules(userId = null) {
   }));
 }
 
+export function getReportScheduleById(id) {
+  const row = db.prepare('SELECT * FROM reports_schedules WHERE id = ?').get(id);
+  if (!row) return null;
+  return {
+    ...row,
+    formats: JSON.parse(row.formats || '[]')
+  };
+}
+
+export function updateReportScheduleLastRun(id, timestamp = new Date().toISOString()) {
+  return db.prepare('UPDATE reports_schedules SET last_run_at = ?, updated_at = ? WHERE id = ?').run(timestamp, timestamp, id).changes > 0;
+}
+
 export function deleteReportSchedule(id) {
   return db.prepare('DELETE FROM reports_schedules WHERE id = ?').run(id).changes > 0;
 }
@@ -408,5 +424,7 @@ export default {
   getReportHistory,
   createReportSchedule,
   getReportSchedules,
+  getReportScheduleById,
+  updateReportScheduleLastRun,
   deleteReportSchedule
 };

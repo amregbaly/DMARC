@@ -201,6 +201,11 @@ export async function fetchDomainHealth(domain = 'voxera.net', selector = '') {
 // Reporting & Template Management APIs
 // ==========================================
 
+export async function fetchAggregateViews(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return authFetch(`${BASE_URL}/reports/aggregate-views?${query}`);
+}
+
 export async function fetchReportTemplates() {
   return authFetch(`${BASE_URL}/reports/templates`);
 }
@@ -237,6 +242,12 @@ export async function createReportSchedule(scheduleData) {
   return authFetch(`${BASE_URL}/reports/schedules`, {
     method: 'POST',
     body: JSON.stringify(scheduleData)
+  });
+}
+
+export async function runReportSchedule(id) {
+  return authFetch(`${BASE_URL}/reports/schedules/${id}/run`, {
+    method: 'POST'
   });
 }
 
