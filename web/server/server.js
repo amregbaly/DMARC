@@ -2095,7 +2095,19 @@ app.delete('/api/reports/templates/:id', authenticateToken, requireRole('admin',
 // 5. Generate On-Demand Report
 app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async (req, res) => {
   try {
-    const { domain = 'all', template_id = 'default', formats = ['pdf', 'xlsx', 'csv'], organization_name, user_logon, logo_url } = req.body;
+    const {
+      domain = 'all',
+      template_id = 'default',
+      formats = ['pdf', 'xlsx', 'csv'],
+      organization_name,
+      user_logon,
+      logo_url,
+      date_from,
+      date_to,
+      disposition,
+      org_name,
+      reporter_org
+    } = req.body;
     
     // Validate domain
     let targetDomain = domain;
@@ -2120,13 +2132,31 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
     ];
 
     if (targetOrg) {
-      args.push('--org-name', targetOrg);
+      args.push('--client-org', targetOrg);
     }
     if (targetUser) {
       args.push('--user-logon', targetUser);
     }
     if (targetLogo) {
       args.push('--logo', targetLogo);
+    }
+
+    // Reporter org filter (e.g. google.com, microsoft.com)
+    const effectiveReporter = (reporter_org || (org_name && org_name !== targetOrg ? org_name : '')).trim();
+    if (effectiveReporter && effectiveReporter !== 'all') {
+      args.push('--reporter-org', effectiveReporter);
+    }
+    if (disposition && disposition !== 'all') {
+      args.push('--disposition', disposition.trim());
+    }
+    if (date_from) {
+      args.push('--date-from', date_from.trim());
+    }
+    if (date_to) {
+      args.push('--date-to', date_to.trim());
+    }
+    if (targetDomain === 'all' && req.user.role !== 'admin' && Array.isArray(req.user.domains) && req.user.domains.length > 0) {
+      args.push('--allowed-domains', req.user.domains.join(','));
     }
 
     execFile('python3', args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {

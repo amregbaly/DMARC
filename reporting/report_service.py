@@ -40,10 +40,15 @@ class GenerateReportRequest(BaseModel):
     domain: Optional[str] = "all"
     date_from: Optional[str] = None
     date_to: Optional[str] = None
-    org_name: Optional[str] = None
+    client_org: Optional[str] = None
+    org_name: Optional[str] = None # alias for client_org
+    user_logon: Optional[str] = None
+    logo: Optional[str] = None
+    reporter_org: Optional[str] = None
     disposition: Optional[str] = None
     template_id: Optional[str] = "default"
     formats: Optional[List[str]] = ["pdf", "xlsx", "csv"]
+    allowed_domains: Optional[List[str]] = None
 
 def load_template(template_id: str) -> dict:
     tpl_path = os.path.join(TEMPLATES_DIR, f"{template_id}.json")
@@ -59,35 +64,45 @@ def generate_report_bundle(
     domain: str = "all",
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    org_name: Optional[str] = None,
+    client_org: Optional[str] = None,
     user_logon: Optional[str] = None,
     logo: Optional[str] = None,
+    reporter_org: Optional[str] = None,
     disposition: Optional[str] = None,
     template_id: str = "default",
     formats: Optional[List[str]] = None,
-    output_dir: str = OUTPUT_DIR
+    output_dir: str = OUTPUT_DIR,
+    allowed_domains: Optional[List[str]] = None,
+    org_name: Optional[str] = None # backwards-compatible alias for client_org
 ) -> dict:
     if formats is None:
         formats = ["pdf", "xlsx", "csv"]
         
     tpl = load_template(template_id)
-    if org_name and org_name.strip():
-        tpl["prepared_for"] = org_name.strip()
+    effective_org = (client_org or org_name or "").strip()
+    if effective_org:
+        tpl["prepared_for"] = effective_org
     if user_logon and user_logon.strip():
-        if org_name and org_name.strip():
-            tpl["prepared_by"] = f"{user_logon.strip()} ({org_name.strip()})"
+        if effective_org:
+            tpl["prepared_by"] = f"{user_logon.strip()} ({effective_org})"
         else:
             tpl["prepared_by"] = user_logon.strip()
     if logo and logo.strip():
         tpl["logo"] = logo.strip()
 
     client = DmarcOpenSearchClient()
+    # Note: client_org is used for report branding (prepared_for).
+    # reporter_org is the OpenSearch filter for report sender (Google, Microsoft, etc.).
+    effective_reporter = reporter_org.strip() if reporter_org and reporter_org.strip() != "all" else None
+    effective_disp = disposition.strip() if disposition and disposition.strip() != "all" else None
+
     data = client.fetch_report_data(
         domain=domain,
         date_from=date_from,
         date_to=date_to,
-        org_name=org_name,
-        disposition=disposition
+        org_name=effective_reporter,
+        disposition=effective_disp,
+        allowed_domains=allowed_domains
     )
 
     timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -184,10 +199,14 @@ def generate_report_api(req: GenerateReportRequest):
             domain=req.domain,
             date_from=req.date_from,
             date_to=req.date_to,
-            org_name=req.org_name,
+            client_org=req.client_org or req.org_name,
+            user_logon=req.user_logon,
+            logo=req.logo,
+            reporter_org=req.reporter_org,
             disposition=req.disposition,
             template_id=req.template_id or "default",
-            formats=req.formats or ["pdf", "xlsx", "csv"]
+            formats=req.formats or ["pdf", "xlsx", "csv"],
+            allowed_domains=req.allowed_domains
         )
         return res
     except Exception as e:
@@ -205,9 +224,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DMARC Report Generation Engine")
     parser.add_argument("--domain", default="all", help="Target domain (default: all)")
     parser.add_argument("--template", default="default", help="Template ID (default, acme_branded)")
-    parser.add_argument("--org-name", default="", help="Client / Organization Name")
+    parser.add_argument("--client-org", default="", help="Client / Organization Name for report branding")
+    parser.add_argument("--org-name", default="", help="Alias for --client-org")
     parser.add_argument("--user-logon", default="", help="User Logon / Username")
     parser.add_argument("--logo", default="", help="Logo image path or data URI")
+    parser.add_argument("--reporter-org", default="", help="OpenSearch Reporter Org filter (e.g. google.com, all)")
+    parser.add_argument("--disposition", default="", help="OpenSearch Disposition filter (none, quarantine, reject, all)")
+    parser.add_argument("--date-from", default="", help="Start date ISO string")
+    parser.add_argument("--date-to", default="", help="End date ISO string")
+    parser.add_argument("--allowed-domains", default="", help="Comma-separated allowed domains for non-admin")
     parser.add_argument("--formats", default="pdf,xlsx,csv", help="Comma-separated formats (pdf,xlsx,csv)")
     parser.add_argument("--output-dir", default=OUTPUT_DIR, help="Output destination folder")
     parser.add_argument("--serve", action="store_true", help="Start the FastAPI HTTP server")
@@ -220,13 +245,20 @@ if __name__ == "__main__":
         uvicorn.run("report_service:app", host="0.0.0.0", port=args.port, reload=True)
     else:
         fmt_list = [f.strip() for f in args.formats.split(",") if f.strip()]
+        effective_client_org = (args.client_org or args.org_name or "").strip()
+        allowed_dom_list = [d.strip() for d in args.allowed_domains.split(",") if d.strip()] if args.allowed_domains else None
         result = generate_report_bundle(
             domain=args.domain,
+            date_from=args.date_from or None,
+            date_to=args.date_to or None,
+            client_org=effective_client_org or None,
+            user_logon=args.user_logon or None,
+            logo=args.logo or None,
+            reporter_org=args.reporter_org or None,
+            disposition=args.disposition or None,
             template_id=args.template,
-            org_name=args.org_name,
-            user_logon=args.user_logon,
-            logo=args.logo,
             formats=fmt_list,
-            output_dir=args.output_dir
+            output_dir=args.output_dir,
+            allowed_domains=allowed_dom_list
         )
         print(json.dumps(result, indent=2))

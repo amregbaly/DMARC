@@ -174,7 +174,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
         domain: reportDomain,
         date_from: dateFrom,
         date_to: dateTo,
-        org_name: orgFilter,
+        reporter_org: orgFilter,
         disposition: dispositionFilter,
         template_id: selectedTemplateId,
         formats: activeFormats,

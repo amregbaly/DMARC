@@ -60,11 +60,15 @@ class DmarcOpenSearchClient:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         org_name: Optional[str] = None,
-        disposition: Optional[str] = None
+        disposition: Optional[str] = None,
+        allowed_domains: Optional[list] = None
     ) -> Dict[str, Any]:
         filters = []
         if domain and domain != "all":
             filters.append({"term": {"header_from.keyword": domain}})
+        elif allowed_domains and len(allowed_domains) > 0:
+            filters.append({"terms": {"header_from.keyword": allowed_domains}})
+
         if org_name and org_name != "all":
             filters.append({"term": {"org_name.keyword": org_name}})
         if disposition and disposition != "all":
@@ -86,9 +90,10 @@ class DmarcOpenSearchClient:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         org_name: Optional[str] = None,
-        disposition: Optional[str] = None
+        disposition: Optional[str] = None,
+        allowed_domains: Optional[list] = None
     ) -> Dict[str, Any]:
-        q = self.build_query(domain, date_from, date_to, org_name, disposition)
+        q = self.build_query(domain, date_from, date_to, org_name, disposition, allowed_domains)
         
         search_body = {
             "size": 100,
