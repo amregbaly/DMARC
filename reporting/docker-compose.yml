@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  dmarc-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dmarc-reporting-service
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
+    environment:
+      - OPENSEARCH_URL=${OPENSEARCH_URL:-https://opensearch:9200}
+      - OPENSEARCH_USER=${OPENSEARCH_USER:-admin}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD:-Asdard11@@}
+      - INDEX_PATTERN=${INDEX_PATTERN:-dmarc_aggregate-*}
+      - OPENSEARCH_ALLOW_SELF_SIGNED=true
+      - PORT=5050
+    volumes:
+      - ./templates:/app/templates
+      - ./output:/app/output
+    networks:
+      - dmarc-net
+
+networks:
+  dmarc-net:
+    driver: bridge

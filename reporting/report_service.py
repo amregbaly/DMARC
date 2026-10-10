@@ -1,0 +1,214 @@
+import os
+import sys
+import json
+import argparse
+from datetime import datetime
+from typing import List, Optional
+from fastapi import FastAPI, HTTPException, Body
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+# Add current path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from engine.opensearch_client import DmarcOpenSearchClient
+from engine.pdf_generator import DmarcPdfGenerator
+from engine.excel_generator import DmarcExcelGenerator
+from engine.csv_generator import DmarcCsvGenerator
+
+app = FastAPI(
+    title="DMARC Sentinel Reporting Service",
+    description="Automated OpenSearch DMARC Report Generator with branded PDF, XLSX, and CSV exports",
+    version="2.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+class GenerateReportRequest(BaseModel):
+    domain: Optional[str] = "all"
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    org_name: Optional[str] = None
+    disposition: Optional[str] = None
+    template_id: Optional[str] = "default"
+    formats: Optional[List[str]] = ["pdf", "xlsx", "csv"]
+
+def load_template(template_id: str) -> dict:
+    tpl_path = os.path.join(TEMPLATES_DIR, f"{template_id}.json")
+    if not os.path.exists(tpl_path):
+        # Fallback to default
+        tpl_path = os.path.join(TEMPLATES_DIR, "default.json")
+    if os.path.exists(tpl_path):
+        with open(tpl_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found.")
+
+def generate_report_bundle(
+    domain: str = "all",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    org_name: Optional[str] = None,
+    disposition: Optional[str] = None,
+    template_id: str = "default",
+    formats: Optional[List[str]] = None,
+    output_dir: str = OUTPUT_DIR
+) -> dict:
+    if formats is None:
+        formats = ["pdf", "xlsx", "csv"]
+        
+    tpl = load_template(template_id)
+    client = DmarcOpenSearchClient()
+    data = client.fetch_report_data(
+        domain=domain,
+        date_from=date_from,
+        date_to=date_to,
+        org_name=org_name,
+        disposition=disposition
+    )
+
+    timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    safe_dom = (domain or "all").replace(".", "_")
+    base_filename = f"DMARC_{tpl.get('id', 'report')}_{safe_dom}_{timestamp_str}"
+    
+    generated_files = {}
+
+    if "pdf" in formats:
+        pdf_path = os.path.join(output_dir, f"{base_filename}.pdf")
+        pdf_gen = DmarcPdfGenerator(tpl)
+        pdf_gen.render_pdf(data, pdf_path, domain=domain)
+        generated_files["pdf"] = {
+            "filename": f"{base_filename}.pdf",
+            "path": pdf_path,
+            "size_bytes": os.path.getsize(pdf_path)
+        }
+
+    if "xlsx" in formats:
+        xlsx_path = os.path.join(output_dir, f"{base_filename}.xlsx")
+        xlsx_gen = DmarcExcelGenerator(tpl)
+        xlsx_gen.render_excel(data, xlsx_path, domain=domain)
+        generated_files["xlsx"] = {
+            "filename": f"{base_filename}.xlsx",
+            "path": xlsx_path,
+            "size_bytes": os.path.getsize(xlsx_path)
+        }
+
+    if "csv" in formats:
+        csv_path = os.path.join(output_dir, f"{base_filename}.csv")
+        csv_gen = DmarcCsvGenerator(tpl)
+        csv_gen.render_csv(data, csv_path, domain=domain)
+        generated_files["csv"] = {
+            "filename": f"{base_filename}.csv",
+            "path": csv_path,
+            "size_bytes": os.path.getsize(csv_path)
+        }
+
+    return {
+        "status": "success",
+        "domain": domain,
+        "template": tpl["name"],
+        "template_id": tpl["id"],
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "summary": data["summary"],
+        "files": generated_files
+    }
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "dmarc-reporting-service", "version": "2.0.0"}
+
+@app.get("/templates")
+def list_templates():
+    templates = []
+    if os.path.exists(TEMPLATES_DIR):
+        for f in os.listdir(TEMPLATES_DIR):
+            if f.endswith(".json"):
+                try:
+                    with open(os.path.join(TEMPLATES_DIR, f), "r", encoding="utf-8") as tf:
+                        templates.append(json.load(tf))
+                except Exception:
+                    pass
+    return {"templates": templates}
+
+@app.get("/templates/{template_id}")
+def get_template_by_id(template_id: str):
+    return load_template(template_id)
+
+@app.post("/templates")
+def save_template(template: dict = Body(...)):
+    tid = template.get("id")
+    if not tid:
+        raise HTTPException(status_code=400, detail="Template ID is required.")
+    path = os.path.join(TEMPLATES_DIR, f"{tid}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(template, f, indent=2)
+    return {"status": "saved", "id": tid}
+
+@app.delete("/templates/{template_id}")
+def delete_template(template_id: str):
+    if template_id in ["default", "acme_branded"]:
+        raise HTTPException(status_code=400, detail="Cannot delete built-in system templates.")
+    path = os.path.join(TEMPLATES_DIR, f"{template_id}.json")
+    if os.path.exists(path):
+        os.remove(path)
+        return {"status": "deleted", "id": template_id}
+    raise HTTPException(status_code=404, detail="Template not found.")
+
+@app.post("/generate")
+def generate_report_api(req: GenerateReportRequest):
+    try:
+        res = generate_report_bundle(
+            domain=req.domain,
+            date_from=req.date_from,
+            date_to=req.date_to,
+            org_name=req.org_name,
+            disposition=req.disposition,
+            template_id=req.template_id or "default",
+            formats=req.formats or ["pdf", "xlsx", "csv"]
+        )
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/download/{filename}")
+def download_report(filename: str):
+    file_path = os.path.join(OUTPUT_DIR, os.path.basename(filename))
+    if os.path.exists(file_path):
+        media_type = "application/pdf" if filename.endswith(".pdf") else ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if filename.endswith(".xlsx") else "text/csv")
+        return FileResponse(file_path, filename=filename, media_type=media_type)
+    raise HTTPException(status_code=404, detail="Requested report file not found.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="DMARC Report Generation Engine")
+    parser.add_argument("--domain", default="all", help="Target domain (default: all)")
+    parser.add_argument("--template", default="default", help="Template ID (default, acme_branded)")
+    parser.add_argument("--formats", default="pdf,xlsx,csv", help="Comma-separated formats (pdf,xlsx,csv)")
+    parser.add_argument("--output-dir", default=OUTPUT_DIR, help="Output destination folder")
+    parser.add_argument("--serve", action="store_true", help="Start the FastAPI HTTP server")
+    parser.add_argument("--port", type=int, default=5050, help="Server port (default: 5050)")
+    args = parser.parse_args()
+
+    if args.serve:
+        import uvicorn
+        print(f"Starting DMARC Reporting Service on port {args.port}...")
+        uvicorn.run("report_service:app", host="0.0.0.0", port=args.port, reload=True)
+    else:
+        fmt_list = [f.strip() for f in args.formats.split(",") if f.strip()]
+        result = generate_report_bundle(
+            domain=args.domain,
+            template_id=args.template,
+            formats=fmt_list,
+            output_dir=args.output_dir
+        )
+        print(json.dumps(result, indent=2))

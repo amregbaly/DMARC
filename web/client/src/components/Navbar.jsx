@@ -9,7 +9,8 @@ import {
   ChevronDown,
   User as UserIcon,
   Briefcase,
-  Eye
+  Eye,
+  FileText
 } from 'lucide-react';
 
 export default function Navbar({
@@ -36,6 +37,7 @@ export default function Navbar({
     { id: 'alignment', label: 'Auth & Alignment' },
     { id: 'threats', label: 'Threat Intel & SOC' },
     { id: 'policies', label: 'Policies & Readiness' },
+    { id: 'reports', label: 'Reports' },
     { id: 'records', label: 'Log Explorer' },
     ...(canManageUsers ? [{ id: 'users', label: 'User Access' }] : [])
   ];
@@ -83,6 +85,7 @@ export default function Navbar({
                   }`}
                 >
                   {tab.id === 'users' && <Users className="w-3.5 h-3.5" />}
+                  {tab.id === 'reports' && <FileText className="w-3.5 h-3.5" />}
                   <span>{tab.label}</span>
                 </button>
               );
@@ -257,6 +260,7 @@ export default function Navbar({
             }`}
           >
             {tab.id === 'users' && <Users className="w-3 h-3" />}
+            {tab.id === 'reports' && <FileText className="w-3 h-3" />}
             <span>{tab.label}</span>
           </button>
         ))}

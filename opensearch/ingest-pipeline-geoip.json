@@ -1,0 +1,20 @@
+{
+  "description": "Enrich DMARC aggregate reports with GeoIP location and reverse DNS metadata",
+  "processors": [
+    {
+      "geoip": {
+        "field": "source_ip_address",
+        "target_field": "source_geoip",
+        "ignore_missing": true
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.source_geoip != null && ctx.source_geoip.country_iso_code != null",
+        "field": "source_country",
+        "value": "{{source_geoip.country_iso_code}}",
+        "override": false
+      }
+    }
+  ]
+}

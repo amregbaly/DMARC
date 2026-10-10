@@ -167,3 +167,62 @@ export async function fetchDomainHealth(domain = 'voxera.net', selector = '') {
   const query = new URLSearchParams({ domain, selector }).toString();
   return authFetch(`${BASE_URL}/domain-health?${query}`);
 }
+
+// ==========================================
+// Reporting & Template Management APIs
+// ==========================================
+
+export async function fetchReportTemplates() {
+  return authFetch(`${BASE_URL}/reports/templates`);
+}
+
+export async function saveReportTemplate(templateData) {
+  return authFetch(`${BASE_URL}/reports/templates`, {
+    method: 'POST',
+    body: JSON.stringify(templateData)
+  });
+}
+
+export async function deleteReportTemplate(id) {
+  return authFetch(`${BASE_URL}/reports/templates/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function generateReport(params) {
+  return authFetch(`${BASE_URL}/reports/generate`, {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+}
+
+export async function fetchReportHistory() {
+  return authFetch(`${BASE_URL}/reports/history`);
+}
+
+export async function fetchReportSchedules() {
+  return authFetch(`${BASE_URL}/reports/schedules`);
+}
+
+export async function createReportSchedule(scheduleData) {
+  return authFetch(`${BASE_URL}/reports/schedules`, {
+    method: 'POST',
+    body: JSON.stringify(scheduleData)
+  });
+}
+
+export async function deleteReportSchedule(id) {
+  return authFetch(`${BASE_URL}/reports/schedules/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+export function getDownloadReportUrl(filename) {
+  const token = getToken();
+  return `${BASE_URL}/reports/download/${encodeURIComponent(filename)}?token=${encodeURIComponent(token || '')}`;
+}
+
+export function getDashboardsExportUrl() {
+  return `${BASE_URL}/reports/dashboards-export`;
+}
+

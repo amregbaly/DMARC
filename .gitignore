@@ -19,6 +19,11 @@ yarn-error.log*
 web/client/dist
 web/client/.vite
 
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
 # OS files
 .DS_Store
 Thumbs.db

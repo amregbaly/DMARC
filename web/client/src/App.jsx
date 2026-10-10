@@ -9,6 +9,7 @@ import PolicyReadiness from './components/PolicyReadiness';
 import RawLogExplorer from './components/RawLogExplorer';
 import DomainHealth from './components/DomainHealth';
 import UserManagement from './components/UserManagement';
+import ReportsDashboard from './components/ReportsDashboard';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import {
@@ -203,8 +204,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Global KPI Cards (shown on log analytics tabs, hidden on health & user management) */}
-        {activeTab !== 'health' && activeTab !== 'users' && (
+        {/* Global KPI Cards (shown on log analytics tabs, hidden on health, reports & user management) */}
+        {activeTab !== 'health' && activeTab !== 'users' && activeTab !== 'reports' && (
           <section aria-label="Executive Overview Metrics">
             <KPIGrid overview={overview} />
           </section>
@@ -218,6 +219,13 @@ export default function App() {
             selectedDomain={selectedDomain}
             onSelectDomain={setSelectedDomain}
             domains={domains}
+          />
+        ) : activeTab === 'reports' ? (
+          <ReportsDashboard
+            domains={domains}
+            selectedDomain={selectedDomain}
+            onSelectDomain={setSelectedDomain}
+            currentUser={currentUser}
           />
         ) : loading && !overview ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">

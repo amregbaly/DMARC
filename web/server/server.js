@@ -4,6 +4,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
 import net from 'node:net';
 import dns from 'node:dns/promises';
 import crypto from 'node:crypto';
@@ -12,6 +15,12 @@ import ipaddr from 'ipaddr.js';
 import { fetch as opensearchFetch, Agent } from 'undici';
 import db from './db.js';
 import { generateToken, authenticateToken, requireRole, enforceDomainAccess } from './auth.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const REPORTS_OUTPUT_DIR = path.resolve(__dirname, '../../reporting/output');
+const TEMPLATES_DIR = path.resolve(__dirname, '../../reporting/templates');
+const DASHBOARDS_EXPORT_PATH = path.resolve(__dirname, '../../opensearch/dashboards-export.ndjson');
 
 // Initialize SQLite Database and seed default admin if necessary
 db.initDb();
@@ -1940,6 +1949,234 @@ app.get('/api/domain-health', authenticateToken, enforceDomainAccess, async (req
   } catch (err) {
     console.error('Domain health error:', err);
     res.status(500).json({ error: 'Failed to inspect domain health. Please try again later.' });
+  }
+});
+// ==========================================
+// REPORT GENERATOR & EXPORT ROUTES
+// ==========================================
+
+// 1. List Templates
+app.get('/api/reports/templates', authenticateToken, async (req, res) => {
+  try {
+    const templates = [];
+    if (fs.existsSync(TEMPLATES_DIR)) {
+      const files = fs.readdirSync(TEMPLATES_DIR);
+      for (const f of files) {
+        if (f.endsWith('.json')) {
+          try {
+            const content = JSON.parse(fs.readFileSync(path.join(TEMPLATES_DIR, f), 'utf-8'));
+            templates.push(content);
+          } catch (e) {
+            console.error('Error parsing template:', f, e);
+          }
+        }
+      }
+    }
+    res.json({ templates });
+  } catch (err) {
+    console.error('List templates error:', err);
+    res.status(500).json({ error: 'Failed to retrieve report templates.' });
+  }
+});
+
+// 2. Get Single Template
+app.get('/api/reports/templates/:id', authenticateToken, async (req, res) => {
+  try {
+    const safeId = path.basename(req.params.id);
+    const tplPath = path.join(TEMPLATES_DIR, `${safeId}.json`);
+    if (!fs.existsSync(tplPath)) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    const tpl = JSON.parse(fs.readFileSync(tplPath, 'utf-8'));
+    res.json(tpl);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve template.' });
+  }
+});
+
+// 3. Create or Update Template (Admin / Manager)
+app.post('/api/reports/templates', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const template = req.body;
+    if (!template || !template.id || typeof template.id !== 'string') {
+      return res.status(400).json({ error: 'Valid template id is required.' });
+    }
+    const safeId = path.basename(template.id).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    template.id = safeId;
+    const tplPath = path.join(TEMPLATES_DIR, `${safeId}.json`);
+    fs.writeFileSync(tplPath, JSON.stringify(template, null, 2), 'utf-8');
+    res.json({ status: 'saved', template });
+  } catch (err) {
+    console.error('Save template error:', err);
+    res.status(500).json({ error: 'Failed to save template.' });
+  }
+});
+
+// 4. Delete Custom Template (Admin / Manager)
+app.delete('/api/reports/templates/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const safeId = path.basename(req.params.id);
+    if (['default', 'acme_branded'].includes(safeId)) {
+      return res.status(400).json({ error: 'Cannot delete core system templates.' });
+    }
+    const tplPath = path.join(TEMPLATES_DIR, `${safeId}.json`);
+    if (fs.existsSync(tplPath)) {
+      fs.unlinkSync(tplPath);
+      return res.json({ status: 'deleted', id: safeId });
+    }
+    res.status(404).json({ error: 'Template not found' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete template.' });
+  }
+});
+
+// 5. Generate On-Demand Report
+app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const { domain = 'all', template_id = 'default', formats = ['pdf', 'xlsx', 'csv'] } = req.body;
+    
+    // Validate domain
+    let targetDomain = domain;
+    if (domain !== 'all' && req.user.role !== 'admin' && Array.isArray(req.user.domains) && !req.user.domains.includes(domain)) {
+      return res.status(403).json({ error: `Access denied to domain ${domain}` });
+    }
+
+    const scriptPath = path.resolve(__dirname, '../../reporting/report_service.py');
+    const safeFormats = Array.isArray(formats) ? formats.filter(f => ['pdf', 'xlsx', 'csv'].includes(f)) : ['pdf'];
+    if (safeFormats.length === 0) safeFormats.push('pdf');
+
+    const args = [
+      scriptPath,
+      '--domain', targetDomain,
+      '--template', path.basename(template_id),
+      '--formats', safeFormats.join(','),
+      '--output-dir', REPORTS_OUTPUT_DIR
+    ];
+
+    execFile('python3', args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('Report generation error:', error, stderr);
+        return res.status(500).json({ error: 'Report generation execution failed.' });
+      }
+
+      try {
+        const result = JSON.parse(stdout.trim());
+        const reportId = crypto.randomUUID();
+        
+        // Add to history
+        db.addReportHistory({
+          id: reportId,
+          userId: req.user.id,
+          username: req.user.username,
+          domain: targetDomain,
+          templateId: template_id,
+          templateName: result.template || template_id,
+          formats: safeFormats,
+          status: 'completed',
+          files: result.files || {},
+          summaryJson: result.summary || {}
+        });
+
+        res.json({
+          report_id: reportId,
+          ...result
+        });
+      } catch (parseErr) {
+        console.error('Failed to parse report service output:', parseErr, stdout);
+        res.status(500).json({ error: 'Report generation output parsing error.' });
+      }
+    });
+  } catch (err) {
+    console.error('Generate report endpoint error:', err);
+    res.status(500).json({ error: 'Failed to process report request.' });
+  }
+});
+
+// 6. Download Report File
+app.get('/api/reports/download/:filename', authenticateToken, async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const safeFilename = path.basename(filename);
+    if (!safeFilename || safeFilename !== filename || safeFilename.includes('..') || !/^[a-zA-Z0-9_\-\.]+$/.test(safeFilename)) {
+      return res.status(400).json({ error: 'Invalid filename provided.' });
+    }
+
+    const filePath = path.join(REPORTS_OUTPUT_DIR, safeFilename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Report file not found.' });
+    }
+
+    res.download(filePath, safeFilename);
+  } catch (err) {
+    console.error('Download error:', err);
+    res.status(500).json({ error: 'Error downloading report file.' });
+  }
+});
+
+// 7. Report History
+app.get('/api/reports/history', authenticateToken, async (req, res) => {
+  try {
+    const userDomains = req.user.role === 'admin' ? null : req.user.domains;
+    const history = db.getReportHistory(userDomains);
+    res.json({ history });
+  } catch (err) {
+    console.error('Report history error:', err);
+    res.status(500).json({ error: 'Failed to retrieve report history.' });
+  }
+});
+
+// 8. Report Schedules
+app.get('/api/reports/schedules', authenticateToken, async (req, res) => {
+  try {
+    const schedules = db.getReportSchedules(req.user.role === 'admin' ? null : req.user.id);
+    res.json({ schedules });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve schedules.' });
+  }
+});
+
+app.post('/api/reports/schedules', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const { name, domain, template_id, schedule_type, recipients, formats } = req.body;
+    if (!name || !recipients) {
+      return res.status(400).json({ error: 'Name and recipients are required.' });
+    }
+    const id = crypto.randomUUID();
+    const created = db.createReportSchedule({
+      id,
+      userId: req.user.id,
+      name,
+      domain: domain || 'all',
+      templateId: template_id || 'default',
+      scheduleType: schedule_type || 'weekly',
+      recipients,
+      formats: formats || ['pdf']
+    });
+    res.json({ status: 'created', schedule: created });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create schedule.' });
+  }
+});
+
+app.delete('/api/reports/schedules/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const ok = db.deleteReportSchedule(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Schedule not found' });
+    res.json({ status: 'deleted', id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete schedule.' });
+  }
+});
+
+// 9. OpenSearch Dashboards NDJSON Export
+app.get('/api/reports/dashboards-export', authenticateToken, async (req, res) => {
+  try {
+    if (!fs.existsSync(DASHBOARDS_EXPORT_PATH)) {
+      return res.status(404).json({ error: 'Dashboards export file not found.' });
+    }
+    res.download(DASHBOARDS_EXPORT_PATH, 'opensearch-dmarc-dashboards.ndjson');
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to download dashboards export.' });
   }
 });
 

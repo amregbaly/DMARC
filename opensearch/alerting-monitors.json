@@ -1,0 +1,251 @@
+{
+  "monitors": [
+    {
+      "name": "DMARC Alert: Domain Pass Rate Below Threshold (<98%)",
+      "type": "monitor",
+      "monitor_type": "query_level_monitor",
+      "enabled": true,
+      "schedule": {
+        "period": {
+          "interval": 1,
+          "unit": "HOURS"
+        }
+      },
+      "inputs": [
+        {
+          "search": {
+            "indices": ["dmarc_aggregate-*"],
+            "query": {
+              "size": 0,
+              "query": {
+                "bool": {
+                  "filter": [
+                    { "range": { "date_begin": { "gte": "now-24h" } } }
+                  ]
+                }
+              },
+              "aggs": {
+                "domains": {
+                  "terms": { "field": "header_from.keyword", "size": 100 },
+                  "aggs": {
+                    "total_msgs": { "sum": { "field": "message_count" } },
+                    "passed_msgs": {
+                      "filter": { "term": { "passed_dmarc": true } },
+                      "aggs": { "volume": { "sum": { "field": "message_count" } } }
+                    },
+                    "pass_rate": {
+                      "bucket_script": {
+                        "buckets_path": {
+                          "passed": "passed_msgs.volume",
+                          "total": "total_msgs"
+                        },
+                        "script": "params.total > 0 ? (params.passed / params.total) * 100 : 100"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "triggers": [
+        {
+          "name": "Pass Rate Drop Trigger",
+          "severity": "1",
+          "condition": {
+            "script": {
+              "source": "for (b in ctx.results[0].aggregations.domains.buckets) { if (b.total_msgs.value > 100 && b.pass_rate.value < 98.0) return true; } return false;",
+              "lang": "painless"
+            }
+          },
+          "actions": [
+            {
+              "name": "Notify Security Team",
+              "destination_id": "placeholder_notification_channel_id",
+              "message_template": {
+                "source": "ALERT: DMARC pass rate dropped below 98% for monitored domain(s) in the last 24h. Total traffic: {{ctx.results.0.aggregations.domains.buckets}}",
+                "lang": "mustache"
+              },
+              "throttle_enabled": true,
+              "throttle": {
+                "value": 4,
+                "unit": "HOURS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DMARC Alert: New Unknown Source Exceeding Message Volume (>50 msgs)",
+      "type": "monitor",
+      "monitor_type": "query_level_monitor",
+      "enabled": true,
+      "schedule": {
+        "period": {
+          "interval": 2,
+          "unit": "HOURS"
+        }
+      },
+      "inputs": [
+        {
+          "search": {
+            "indices": ["dmarc_aggregate-*"],
+            "query": {
+              "size": 0,
+              "query": {
+                "bool": {
+                  "filter": [
+                    { "range": { "date_begin": { "gte": "now-6h" } } },
+                    { "term": { "passed_dmarc": false } }
+                  ]
+                }
+              },
+              "aggs": {
+                "suspicious_ips": {
+                  "terms": { "field": "source_ip_address.keyword", "size": 25 },
+                  "aggs": {
+                    "volume": { "sum": { "field": "message_count" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "triggers": [
+        {
+          "name": "Unknown Source Volume Exceeded",
+          "severity": "2",
+          "condition": {
+            "script": {
+              "source": "for (b in ctx.results[0].aggregations.suspicious_ips.buckets) { if (b.volume.value > 50) return true; } return false;",
+              "lang": "painless"
+            }
+          },
+          "actions": [
+            {
+              "name": "Notify SOC Webhook",
+              "destination_id": "placeholder_notification_channel_id",
+              "message_template": {
+                "source": "WARNING: Unknown or failing mail source sent >50 messages in the last 6 hours: {{ctx.results.0.aggregations.suspicious_ips.buckets}}",
+                "lang": "mustache"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DMARC Alert: Spoofing Spike (Fail/Fail Volume Exceeded)",
+      "type": "monitor",
+      "monitor_type": "query_level_monitor",
+      "enabled": true,
+      "schedule": {
+        "period": {
+          "interval": 30,
+          "unit": "MINUTES"
+        }
+      },
+      "inputs": [
+        {
+          "search": {
+            "indices": ["dmarc_aggregate-*"],
+            "query": {
+              "size": 0,
+              "query": {
+                "bool": {
+                  "filter": [
+                    { "range": { "date_begin": { "gte": "now-2h" } } },
+                    { "term": { "spf_aligned": false } },
+                    { "term": { "dkim_aligned": false } }
+                  ]
+                }
+              },
+              "aggs": {
+                "total_spoof_volume": {
+                  "sum": { "field": "message_count" }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "triggers": [
+        {
+          "name": "Spoofing Spike Trigger",
+          "severity": "1",
+          "condition": {
+            "script": {
+              "source": "return ctx.results[0].aggregations.total_spoof_volume.value > 100;",
+              "lang": "painless"
+            }
+          },
+          "actions": [
+            {
+              "name": "Page Incident Commander",
+              "destination_id": "placeholder_notification_channel_id",
+              "message_template": {
+                "source": "CRITICAL: Spoofing burst detected! Over {{ctx.results.0.aggregations.total_spoof_volume.value}} fail/fail messages sent across monitored domains in past 2 hours.",
+                "lang": "mustache"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DMARC Ingestion Health: Missing Reports from Google or Microsoft (>48h)",
+      "type": "monitor",
+      "monitor_type": "query_level_monitor",
+      "enabled": true,
+      "schedule": {
+        "period": {
+          "interval": 12,
+          "unit": "HOURS"
+        }
+      },
+      "inputs": [
+        {
+          "search": {
+            "indices": ["dmarc_aggregate-*"],
+            "query": {
+              "size": 0,
+              "query": {
+                "bool": {
+                  "filter": [
+                    { "range": { "date_begin": { "gte": "now-48h" } } },
+                    { "terms": { "org_name.keyword": ["google.com", "Google Inc.", "microsoft.com"] } }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "triggers": [
+        {
+          "name": "No Tier-1 Ingestion in 48h",
+          "severity": "3",
+          "condition": {
+            "script": {
+              "source": "return ctx.results[0].hits.total.value == 0;",
+              "lang": "painless"
+            }
+          },
+          "actions": [
+            {
+              "name": "Notify Mail Ops",
+              "destination_id": "placeholder_notification_channel_id",
+              "message_template": {
+                "source": "INGESTION NOTICE: No DMARC aggregate reports received from Google or Microsoft in the last 48 hours. Check DNS DMARC rua record or email pipeline.",
+                "lang": "mustache"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

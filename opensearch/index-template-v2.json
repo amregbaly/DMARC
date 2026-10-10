@@ -1,0 +1,129 @@
+{
+  "index_patterns": ["dmarc_aggregate-*"],
+  "priority": 200,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.mapping.total_fields.limit": 2000,
+      "default_pipeline": "dmarc-enrichment-pipeline"
+    },
+    "mappings": {
+      "properties": {
+        "date_begin": { "type": "date" },
+        "date_end": { "type": "date" },
+        "date_range": { "type": "date" },
+        "org_name": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "org_email": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "report_id": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "source_ip_address": {
+          "type": "ip",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "source_geoip": {
+          "properties": {
+            "location": { "type": "geo_point" },
+            "country_iso_code": { "type": "keyword" },
+            "country_name": { "type": "keyword" },
+            "city_name": { "type": "keyword" },
+            "region_name": { "type": "keyword" }
+          }
+        },
+        "message_count": { "type": "long" },
+        "disposition": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "dkim_aligned": { "type": "boolean" },
+        "spf_aligned": { "type": "boolean" },
+        "passed_dmarc": { "type": "boolean" },
+        "header_from": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "envelope_from": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "envelope_to": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "published_policy": {
+          "properties": {
+            "domain": { "type": "keyword" },
+            "adkim": { "type": "keyword" },
+            "aspf": { "type": "keyword" },
+            "p": { "type": "keyword" },
+            "sp": { "type": "keyword" },
+            "pct": { "type": "long" }
+          }
+        },
+        "dkim_results": {
+          "type": "nested",
+          "properties": {
+            "domain": { "type": "keyword" },
+            "selector": { "type": "keyword" },
+            "result": { "type": "keyword" },
+            "human_result": { "type": "keyword" }
+          }
+        },
+        "dkim_results_combined": {
+          "type": "keyword"
+        },
+        "spf_results": {
+          "type": "nested",
+          "properties": {
+            "domain": { "type": "keyword" },
+            "scope": { "type": "keyword" },
+            "result": { "type": "keyword" }
+          }
+        },
+        "spf_results_combined": {
+          "type": "keyword"
+        },
+        "policy_overrides": {
+          "properties": {
+            "type": { "type": "keyword" },
+            "comment": { "type": "text" }
+          }
+        },
+        "source_name": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "source_base_domain": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "source_reverse_dns": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "source_country": {
+          "type": "keyword"
+        },
+        "source_type": {
+          "type": "keyword"
+        },
+        "source_as_name": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } }
+        },
+        "source_as_domain": {
+          "type": "keyword"
+        },
+        "source_asn": { "type": "long" }
+      }
+    }
+  }
+}

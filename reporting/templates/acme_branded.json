@@ -1,0 +1,49 @@
+{
+  "id": "acme_branded",
+  "name": "Acme CyberSecurity (Client Branded)",
+  "description": "White-labeled client template with deep purple and gold accents for external MSP client audits",
+  "logo": "templates/assets/acme_logo.png",
+  "logo_position": "right",
+  "logo_max_height_px": 55,
+  "brand_colors": {
+    "primary": "#4c1d95",
+    "secondary": "#7c3aed",
+    "accent": "#d97706",
+    "table_header": "#581c87",
+    "table_header_text": "#fdf4ff",
+    "pass_color": "#059669",
+    "fail_color": "#dc2626",
+    "warn_color": "#d97706",
+    "background_light": "#faf5ff",
+    "card_background": "#ffffff",
+    "border_color": "#f3e8ff"
+  },
+  "fonts": {
+    "heading": "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    "body": "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    "mono": "'JetBrains Mono', 'Courier New', monospace"
+  },
+  "title": "Informe Ejecutivo de Autenticación DMARC y Seguridad",
+  "subtitle": "Evaluación de Alineación SPF/DKIM y Detección de Suplantación de Identidad",
+  "cover_page": true,
+  "prepared_by": "Acme Managed SOC & Security Services",
+  "prepared_for": "Acme Global Enterprise",
+  "header_text": "Acme CyberSecurity • Auditoría de Seguridad de Correo",
+  "footer_text": "Propiedad de Acme CyberSecurity • Documento Privado y Confidencial",
+  "confidentiality_notice": "CONFIDENCIAL: Este informe contiene métricas de seguridad de correo de la organización. Prohibida su divulgación no autorizada.",
+  "contact_details": "contacto@acme-security.com | +1 (555) 019-2831",
+  "website": "https://acme-security.com",
+  "language": "es",
+  "sections": [
+    "executive_summary",
+    "pass_rate_trend",
+    "disposition_breakdown",
+    "authentication_results",
+    "top_sources_inventory",
+    "security_threats",
+    "recommended_actions",
+    "raw_tables_appendix"
+  ],
+  "default_formats": ["pdf", "xlsx", "csv"],
+  "file_name_pattern": "Acme_DMARC_{client}_{domain}_{date}"
+}

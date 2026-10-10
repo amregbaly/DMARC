@@ -39,10 +39,40 @@ export function initDb() {
       PRIMARY KEY (user_id, domain)
     );
 
+    CREATE TABLE IF NOT EXISTS reports_history (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      username TEXT,
+      domain TEXT NOT NULL,
+      template_id TEXT NOT NULL,
+      template_name TEXT NOT NULL,
+      formats TEXT NOT NULL,
+      status TEXT NOT NULL,
+      files TEXT NOT NULL,
+      summary_json TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS reports_schedules (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      template_id TEXT NOT NULL,
+      schedule_type TEXT NOT NULL,
+      recipients TEXT NOT NULL,
+      formats TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_users_parent_id ON users(parent_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_user_domains_user_id ON user_domains(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_domains_domain ON user_domains(domain);
+    CREATE INDEX IF NOT EXISTS idx_reports_history_domain ON reports_history(domain);
+    CREATE INDEX IF NOT EXISTS idx_reports_history_created_at ON reports_history(created_at);
   `);
 
   // Ensure initial admin exists if user table is brand new
@@ -227,6 +257,97 @@ export function changePassword(id, newPassword) {
   return true;
 }
 
+export function addReportHistory({ id, userId, username, domain, templateId, templateName, formats, status, files, summaryJson }) {
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO reports_history (id, user_id, username, domain, template_id, template_name, formats, status, files, summary_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    userId || null,
+    username || 'System',
+    domain || 'all',
+    templateId || 'default',
+    templateName || 'Sentinel Enterprise',
+    JSON.stringify(formats || []),
+    status || 'completed',
+    JSON.stringify(files || {}),
+    JSON.stringify(summaryJson || {}),
+    now
+  );
+  return getReportHistoryItem(id);
+}
+
+export function getReportHistoryItem(id) {
+  const row = db.prepare('SELECT * FROM reports_history WHERE id = ?').get(id);
+  if (!row) return null;
+  return {
+    ...row,
+    formats: JSON.parse(row.formats || '[]'),
+    files: JSON.parse(row.files || '{}'),
+    summary: JSON.parse(row.summary_json || '{}')
+  };
+}
+
+export function getReportHistory(userDomains = null, limit = 50) {
+  let query = 'SELECT * FROM reports_history';
+  const params = [];
+  if (Array.isArray(userDomains) && userDomains.length > 0) {
+    const placeholders = userDomains.map(() => '?').join(',');
+    query += ` WHERE domain IN (${placeholders}) OR domain = 'all'`;
+    params.push(...userDomains);
+  }
+  query += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(limit);
+
+  const rows = db.prepare(query).all(...params);
+  return rows.map(r => ({
+    ...r,
+    formats: JSON.parse(r.formats || '[]'),
+    files: JSON.parse(r.files || '{}'),
+    summary: JSON.parse(r.summary_json || '{}')
+  }));
+}
+
+export function createReportSchedule({ id, userId, name, domain, templateId, scheduleType, recipients, formats }) {
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO reports_schedules (id, user_id, name, domain, template_id, schedule_type, recipients, formats, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(
+    id,
+    userId,
+    name,
+    domain || 'all',
+    templateId || 'default',
+    scheduleType || 'weekly',
+    recipients || '',
+    JSON.stringify(formats || ['pdf']),
+    now,
+    now
+  );
+  return db.prepare('SELECT * FROM reports_schedules WHERE id = ?').get(id);
+}
+
+export function getReportSchedules(userId = null) {
+  let query = 'SELECT * FROM reports_schedules';
+  const params = [];
+  if (userId) {
+    query += ' WHERE user_id = ?';
+    params.push(userId);
+  }
+  query += ' ORDER BY created_at DESC';
+  const rows = db.prepare(query).all(...params);
+  return rows.map(r => ({
+    ...r,
+    formats: JSON.parse(r.formats || '[]')
+  }));
+}
+
+export function deleteReportSchedule(id) {
+  return db.prepare('DELETE FROM reports_schedules WHERE id = ?').run(id).changes > 0;
+}
+
 export default {
   initDb,
   getUserByUsername,
@@ -238,5 +359,11 @@ export default {
   createUser,
   updateUser,
   deleteUser,
-  changePassword
+  changePassword,
+  addReportHistory,
+  getReportHistoryItem,
+  getReportHistory,
+  createReportSchedule,
+  getReportSchedules,
+  deleteReportSchedule
 };
