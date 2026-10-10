@@ -223,6 +223,53 @@ export function getDownloadReportUrl(filename) {
 }
 
 export function getDashboardsExportUrl() {
-  return `${BASE_URL}/reports/dashboards-export`;
+  const token = getToken();
+  return `${BASE_URL}/reports/dashboards-export?token=${encodeURIComponent(token || '')}`;
+}
+
+export async function downloadReportFile(filename) {
+  const token = getToken();
+  const headers = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const url = getDownloadReportUrl(filename);
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || `Download failed with status ${res.status}`);
+  }
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+}
+
+export async function downloadDashboardsExport() {
+  const token = getToken();
+  const headers = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const url = getDashboardsExportUrl();
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || `Export failed with status ${res.status}`);
+  }
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = 'opensearch-dmarc-dashboards.ndjson';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
 }
 

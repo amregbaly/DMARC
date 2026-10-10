@@ -31,7 +31,12 @@ export function verifyToken(token) {
 // Middleware: Verify JWT and attach active user to req.user
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+
+  // Also support token passed in query parameter (e.g. for browser file downloads like PDF/XLSX/CSV/NDJSON)
+  if (!token && req.query && typeof req.query.token === 'string' && req.query.token.trim()) {
+    token = req.query.token.trim();
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication required. No token provided.' });

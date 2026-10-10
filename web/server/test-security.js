@@ -6,7 +6,7 @@ async function runTests() {
   console.log('🚀 Starting test server instance...');
   const serverProc = spawn('node', ['server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: '5055' },
+    env: { ...process.env, PORT: '5055', NODE_ENV: 'test' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -94,6 +94,28 @@ async function runTests() {
       headers: { Authorization: `Bearer ${testAdminToken}`, Origin: 'http://localhost:3000' }
     });
     assert(ssrfPayload2.status === 400, 'URL & metadata payload rejected with HTTP 400');
+
+    // Test 5: Report download authentication & path traversal protection
+    console.log('\n--- Test 5: Report Download Auth & Path Traversal ---');
+    const dlNoToken = await fetch(`${BASE}/api/reports/dashboards-export`, {
+      headers: { Origin: 'http://localhost:3000' }
+    });
+    assert(dlNoToken.status === 401, 'Download without token rejected with HTTP 401');
+
+    const dlWithQuery = await fetch(`${BASE}/api/reports/dashboards-export?token=${testAdminToken}`, {
+      headers: { Origin: 'http://localhost:3000' }
+    });
+    assert(dlWithQuery.status === 200, 'Download with query parameter token succeeds with HTTP 200');
+
+    const dlWithHeader = await fetch(`${BASE}/api/reports/dashboards-export`, {
+      headers: { Authorization: `Bearer ${testAdminToken}`, Origin: 'http://localhost:3000' }
+    });
+    assert(dlWithHeader.status === 200, 'Download with Bearer header succeeds with HTTP 200');
+
+    const pathTraversal = await fetch(`${BASE}/api/reports/download/..%2f..%2fetc%2fpasswd?token=${testAdminToken}`, {
+      headers: { Origin: 'http://localhost:3000' }
+    });
+    assert([400, 404].includes(pathTraversal.status), 'Path traversal attempt rejected safely');
 
     console.log(`\n========================================`);
     console.log(`Test Results: ${passed} passed, ${failed} failed`);

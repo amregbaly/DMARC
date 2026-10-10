@@ -31,7 +31,9 @@ import {
   createReportSchedule,
   deleteReportSchedule,
   getDownloadReportUrl,
-  getDashboardsExportUrl
+  getDashboardsExportUrl,
+  downloadReportFile,
+  downloadDashboardsExport
 } from '../services/api';
 
 export default function ReportsDashboard({ domains = [], selectedDomain, onSelectDomain, currentUser }) {
@@ -248,7 +250,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
           <div className="flex items-center gap-3">
             <a
-              href="/api/reports/dashboards-export"
+              href={getDashboardsExportUrl()}
+              onClick={(e) => {
+                e.preventDefault();
+                downloadDashboardsExport().catch(() => {
+                  window.location.href = getDashboardsExportUrl();
+                });
+              }}
               download="opensearch-dmarc-dashboards.ndjson"
               className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-2 transition"
             >
@@ -525,7 +533,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                   <label className="text-xs font-bold text-slate-300">Download Generated Files:</label>
                   {generatedResult.files?.pdf && (
                     <a
-                      href={`/api/reports/download/${generatedResult.files.pdf.filename}`}
+                      href={getDownloadReportUrl(generatedResult.files.pdf.filename)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        downloadReportFile(generatedResult.files.pdf.filename).catch(() => {
+                          window.location.href = getDownloadReportUrl(generatedResult.files.pdf.filename);
+                        });
+                      }}
                       className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center justify-between transition"
                     >
                       <div className="flex items-center gap-2">
@@ -538,7 +552,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
                   {generatedResult.files?.xlsx && (
                     <a
-                      href={`/api/reports/download/${generatedResult.files.xlsx.filename}`}
+                      href={getDownloadReportUrl(generatedResult.files.xlsx.filename)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        downloadReportFile(generatedResult.files.xlsx.filename).catch(() => {
+                          window.location.href = getDownloadReportUrl(generatedResult.files.xlsx.filename);
+                        });
+                      }}
                       className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-between transition"
                     >
                       <div className="flex items-center gap-2">
@@ -551,7 +571,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
                   {generatedResult.files?.csv && (
                     <a
-                      href={`/api/reports/download/${generatedResult.files.csv.filename}`}
+                      href={getDownloadReportUrl(generatedResult.files.csv.filename)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        downloadReportFile(generatedResult.files.csv.filename).catch(() => {
+                          window.location.href = getDownloadReportUrl(generatedResult.files.csv.filename);
+                        });
+                      }}
                       className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-blue-500/30 text-blue-300 text-xs font-semibold flex items-center justify-between transition"
                     >
                       <div className="flex items-center gap-2">
@@ -808,7 +834,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                         <div className="flex items-center justify-end gap-1.5">
                           {item.files?.pdf && (
                             <a
-                              href={`/api/reports/download/${item.files.pdf.filename}`}
+                              href={getDownloadReportUrl(item.files.pdf.filename)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                downloadReportFile(item.files.pdf.filename).catch(() => {
+                                  window.location.href = getDownloadReportUrl(item.files.pdf.filename);
+                                });
+                              }}
                               className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded text-[11px] font-semibold flex items-center gap-1 transition"
                               title="Download PDF"
                             >
@@ -818,7 +850,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                           )}
                           {item.files?.xlsx && (
                             <a
-                              href={`/api/reports/download/${item.files.xlsx.filename}`}
+                              href={getDownloadReportUrl(item.files.xlsx.filename)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                downloadReportFile(item.files.xlsx.filename).catch(() => {
+                                  window.location.href = getDownloadReportUrl(item.files.xlsx.filename);
+                                });
+                              }}
                               className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded text-[11px] font-semibold flex items-center gap-1 transition"
                               title="Download Excel"
                             >
@@ -828,7 +866,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                           )}
                           {item.files?.csv && (
                             <a
-                              href={`/api/reports/download/${item.files.csv.filename}`}
+                              href={getDownloadReportUrl(item.files.csv.filename)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                downloadReportFile(item.files.csv.filename).catch(() => {
+                                  window.location.href = getDownloadReportUrl(item.files.csv.filename);
+                                });
+                              }}
                               className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 rounded text-[11px] font-semibold flex items-center gap-1 transition"
                               title="Download CSV"
                             >
@@ -999,7 +1043,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
               </div>
 
               <a
-                href="/api/reports/dashboards-export"
+                href={getDashboardsExportUrl()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  downloadDashboardsExport().catch(() => {
+                    window.location.href = getDashboardsExportUrl();
+                  });
+                }}
                 download="opensearch-dmarc-dashboards.ndjson"
                 className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 hover:opacity-90 transition shrink-0"
               >
