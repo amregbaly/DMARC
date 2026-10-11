@@ -55,7 +55,15 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
   // State: Generator parameters
   const [reportDomain, setReportDomain] = useState(selectedDomain || 'all');
   const [reportLanguage, setReportLanguage] = useState(currentUser?.language || language || 'en');
-  const [datePreset, setDatePreset] = useState('30d'); // '7d' | '30d' | '90d' | 'all'
+  const [datePreset, setDatePreset] = useState('30d'); // '7d' | '30d' | '90d' | 'all' | 'custom'
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [customTo, setCustomTo] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
   const [orgFilter, setOrgFilter] = useState('all');
   const [dispositionFilter, setDispositionFilter] = useState('all');
   const [formats, setFormats] = useState({ pdf: true, xlsx: true, csv: true });
@@ -182,6 +190,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
       const d = new Date();
       d.setDate(now.getDate() - 90);
       dateFrom = d.toISOString();
+    } else if (datePreset === 'custom') {
+      if (customFrom) {
+        dateFrom = new Date(`${customFrom}T00:00:00`).toISOString();
+      }
+      if (customTo) {
+        dateTo = new Date(`${customTo}T23:59:59.999`).toISOString();
+      }
     }
 
     try {
@@ -360,9 +375,11 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
           domains={domains}
           selectedDomain={reportDomain}
           currentUser={currentUser}
-          onSwitchToGenerate={({ domain, preset }) => {
+          onSwitchToGenerate={({ domain, preset, customDateFrom, customDateTo }) => {
             if (domain) setReportDomain(domain);
             if (preset) setDatePreset(preset);
+            if (customDateFrom) setCustomFrom(customDateFrom);
+            if (customDateTo) setCustomTo(customDateTo);
             setActiveSubTab('generate');
           }}
         />
@@ -405,14 +422,47 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                   <select
                     value={datePreset}
                     onChange={(e) => setDatePreset(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-cyan-500"
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-cyan-500 cursor-pointer"
                   >
                     <option value="7d">Last 7 Days (Tactical)</option>
                     <option value="30d">Last 30 Days (Standard Audit)</option>
                     <option value="90d">Last 90 Days (Quarterly Executive)</option>
                     <option value="all">All Ingested Data</option>
+                    <option value="custom">Custom Date Range (Specific Dates)</option>
                   </select>
                 </div>
+
+                {/* Custom Date Range Specific Inputs */}
+                {datePreset === 'custom' && (
+                  <div className="col-span-1 sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-950/80 p-3.5 rounded-xl border border-cyan-500/30 animate-in fade-in">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Date From (Start)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={customFrom}
+                        onChange={(e) => setCustomFrom(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono focus:ring-1 focus:ring-cyan-500 [color-scheme:dark] cursor-pointer"
+                        required={datePreset === 'custom'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Date To (End)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={customTo}
+                        onChange={(e) => setCustomTo(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono focus:ring-1 focus:ring-cyan-500 [color-scheme:dark] cursor-pointer"
+                        required={datePreset === 'custom'}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Reporting Org Filter */}
                 <div>
