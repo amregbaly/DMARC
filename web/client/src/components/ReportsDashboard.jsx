@@ -319,16 +319,16 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="px-2 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded">
-                ENTERPRISE REPORTING ENGINE
+                {t('reports.engineBadge', 'ENTERPRISE REPORTING ENGINE')}
               </span>
               <span className="text-xs text-slate-500">• OpenSearch 3.3.2</span>
             </div>
             <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
               <FileText className="w-6 h-6 text-cyan-400" />
-              Branded DMARC Executive Reports
+              {t('reports.title', 'Branded DMARC Executive Reports')}
             </h1>
             <p className="text-xs text-slate-400 max-w-2xl mt-1">
-              Generate pixel-perfect client reports in PDF, multi-sheet Excel (.xlsx), and CSV formats with customizable corporate branding, logo placement, client readiness verdict, and white-labeling.
+              {t('reports.subtitle', 'Generate pixel-perfect client reports in PDF, multi-sheet Excel (.xlsx), and CSV formats with customizable corporate branding, logo placement, client readiness verdict, and white-labeling.')}
             </p>
           </div>
         </div>
@@ -395,19 +395,19 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
             <form onSubmit={handleGenerateReport} className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-6">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-cyan-400" />
-                Report Parameters & Scope
+                {t('reports.paramsTitle', 'Report Parameters & Scope')}
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Domain Selector */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Monitored Domain</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">{t('reports.domainLabel', 'Monitored Domain')}</label>
                   <select
                     value={reportDomain}
                     onChange={(e) => setReportDomain(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-cyan-500"
                   >
-                    <option value="all">All Monitored Domains</option>
+                    <option value="all">{t('filters.allDomains', 'All Monitored Domains')}</option>
                     {domains.map((d) => (
                       <option key={d} value={d}>
                         {d}
@@ -418,17 +418,17 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
                 {/* Date Range Presets */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Time Range Preset</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">{t('reports.timeRangeLabel', 'Time Range Preset')}</label>
                   <select
                     value={datePreset}
                     onChange={(e) => setDatePreset(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-cyan-500 cursor-pointer"
                   >
-                    <option value="7d">Last 7 Days (Tactical)</option>
-                    <option value="30d">Last 30 Days (Standard Audit)</option>
-                    <option value="90d">Last 90 Days (Quarterly Executive)</option>
-                    <option value="all">All Ingested Data</option>
-                    <option value="custom">Custom Date Range (Specific Dates)</option>
+                    <option value="7d">{t('reports.preset7d', 'Last 7 Days (Tactical)')}</option>
+                    <option value="30d">{t('reports.preset30d', 'Last 30 Days (Standard Audit)')}</option>
+                    <option value="90d">{t('reports.preset90d', 'Last 90 Days (Quarterly Executive)')}</option>
+                    <option value="all">{t('reports.presetAll', 'All Ingested Data')}</option>
+                    <option value="custom">{t('reports.presetCustom', 'Custom Date Range (Specific Dates)')}</option>
                   </select>
                 </div>
 
@@ -438,7 +438,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Date From (Start)</span>
+                        <span>{t('reports.dateFromStart', 'Date From (Start)')}</span>
                       </label>
                       <input
                         type="date"
@@ -451,7 +451,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Date To (End)</span>
+                        <span>{t('reports.dateToEnd', 'Date To (End)')}</span>
                       </label>
                       <input
                         type="date"
@@ -466,13 +466,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
                 {/* Reporting Org Filter */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Reporting Organization</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">{t('reports.reporterOrgLabel', 'Reporting Organization')}</label>
                   <select
                     value={orgFilter}
                     onChange={(e) => setOrgFilter(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-cyan-500"
                   >
-                    <option value="all">All Organizations (Google, Microsoft, etc.)</option>
+                    <option value="all">{t('reports.allReceivers', 'All Organizations (Google, Microsoft, etc.)')}</option>
                     <option value="google.com">google.com / Google Inc.</option>
                     <option value="microsoft.com">microsoft.com</option>
                     <option value="yahoo.com">yahoo.com</option>
@@ -481,16 +481,16 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
                 {/* Disposition Filter */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">Receiver Policy Disposition</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">{t('reports.dispositionLabel', 'Receiver Policy Disposition')}</label>
                   <select
                     value={dispositionFilter}
                     onChange={(e) => setDispositionFilter(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-cyan-500"
                   >
-                    <option value="all">All Dispositions (none, quarantine, reject)</option>
-                    <option value="none">Only Delivered (none)</option>
-                    <option value="quarantine">Only Quarantined (quarantine)</option>
-                    <option value="reject">Only Gateway Blocked (reject)</option>
+                    <option value="all">{t('reports.allDispositions', 'All Dispositions (none, quarantine, reject)')}</option>
+                    <option value="none">{t('reports.dispNone', 'Only Delivered (none)')}</option>
+                    <option value="quarantine">{t('reports.dispQuarantine', 'Only Quarantined (quarantine)')}</option>
+                    <option value="reject">{t('reports.dispReject', 'Only Gateway Blocked (reject)')}</option>
                   </select>
                 </div>
               </div>
@@ -596,7 +596,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
               {/* Format Checkboxes */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-2">Export Formats</label>
+                <label className="block text-xs font-bold text-slate-300 mb-2">{t('reports.exportFormats', 'Export Formats')}</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 transition">
                     <input
@@ -608,9 +608,9 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     <div>
                       <span className="text-xs font-bold text-white flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-rose-400" />
-                        PDF Document
+                        {t('reports.pdfFormat', 'PDF Document')}
                       </span>
-                      <p className="text-[10px] text-slate-500">Executive Briefing & Visuals</p>
+                      <p className="text-[10px] text-slate-500">{t('reports.pdfDesc', 'Executive Briefing & Visuals')}</p>
                     </div>
                   </label>
 
@@ -624,9 +624,9 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     <div>
                       <span className="text-xs font-bold text-white flex items-center gap-1.5">
                         <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                        Excel (.xlsx)
+                        {t('reports.xlsxFormat', 'Excel (.xlsx)')}
                       </span>
-                      <p className="text-[10px] text-slate-500">Multi-Sheet & Formatting</p>
+                      <p className="text-[10px] text-slate-500">{t('reports.xlsxDesc', 'Multi-Sheet & Formatting')}</p>
                     </div>
                   </label>
 
@@ -640,9 +640,9 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     <div>
                       <span className="text-xs font-bold text-white flex items-center gap-1.5">
                         <Download className="w-3.5 h-3.5 text-blue-400" />
-                        CSV Bundle
+                        {t('reports.csvFormat', 'CSV Bundle')}
                       </span>
-                      <p className="text-[10px] text-slate-500">SIEM & Threat Feeds</p>
+                      <p className="text-[10px] text-slate-500">{t('reports.csvDesc', 'SIEM & Threat Feeds')}</p>
                     </div>
                   </label>
                 </div>
@@ -664,12 +664,12 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                 {generating ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Aggregating OpenSearch Telemetry & Generating Branded Assets...</span>
+                    <span>{t('reports.generatingBtn', 'Aggregating OpenSearch Telemetry & Generating Branded Assets...')}</span>
                   </>
                 ) : (
                   <>
                     <FileText className="w-4 h-4" />
-                    <span>Generate & Compile Branded Report</span>
+                    <span>{t('reports.generateBtn', 'Generate & Compile Branded Report')}</span>
                   </>
                 )}
               </button>
@@ -683,17 +683,17 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
               <div className="glass-panel p-6 rounded-2xl border border-emerald-500/40 bg-emerald-950/20 space-y-4">
                 <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
                   <CheckCircle2 className="w-5 h-5 shrink-0" />
-                  <span>Report Generated Successfully!</span>
+                  <span>{t('reports.successTitle', 'Report Generated Successfully!')}</span>
                 </div>
 
                 <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs space-y-1 font-mono">
-                  <div className="text-slate-400">Target: <strong className="text-white">{generatedResult.domain}</strong></div>
-                  <div className="text-slate-400">Total Volume: <strong className="text-cyan-400">{generatedResult.summary?.total_messages?.toLocaleString()} msgs</strong></div>
-                  <div className="text-slate-400">Pass Rate: <strong className="text-emerald-400">{generatedResult.summary?.pass_percentage}%</strong></div>
+                  <div className="text-slate-400">{t('reports.targetLabel', 'Target')}: <strong className="text-white">{generatedResult.domain}</strong></div>
+                  <div className="text-slate-400">{t('reports.totalVolume', 'Total Volume')}: <strong className="text-cyan-400">{generatedResult.summary?.total_messages?.toLocaleString()} msgs</strong></div>
+                  <div className="text-slate-400">{t('policies.complianceScore', 'Pass Rate')}: <strong className="text-emerald-400">{generatedResult.summary?.pass_percentage}%</strong></div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300">Download Generated Files:</label>
+                  <label className="text-xs font-bold text-slate-300">{t('reports.downloadFilesLabel', 'Download Generated Files:')}</label>
                   {generatedResult.files?.pdf && (
                     <a
                       href={getDownloadReportUrl(generatedResult.files.pdf.filename)}
@@ -707,7 +707,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     >
                       <div className="flex items-center gap-2">
                         <FileText className="w-4 h-4 text-rose-400" />
-                        <span>Executive PDF ({Math.round(generatedResult.files.pdf.size_bytes / 1024)} KB)</span>
+                        <span>{t('reports.downloadPdf', 'Executive PDF')} ({Math.round(generatedResult.files.pdf.size_bytes / 1024)} KB)</span>
                       </div>
                       <Download className="w-3.5 h-3.5" />
                     </a>
@@ -726,7 +726,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     >
                       <div className="flex items-center gap-2">
                         <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                        <span>Formatted Excel (.xlsx) ({Math.round(generatedResult.files.xlsx.size_bytes / 1024)} KB)</span>
+                        <span>{t('reports.downloadXlsx', 'Formatted Excel (.xlsx)')} ({Math.round(generatedResult.files.xlsx.size_bytes / 1024)} KB)</span>
                       </div>
                       <Download className="w-3.5 h-3.5" />
                     </a>
@@ -745,7 +745,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     >
                       <div className="flex items-center gap-2">
                         <Download className="w-4 h-4 text-blue-400" />
-                        <span>Raw CSV Bundle ({Math.round(generatedResult.files.csv.size_bytes / 1024)} KB)</span>
+                        <span>{t('reports.downloadCsv', 'Raw CSV Bundle')} ({Math.round(generatedResult.files.csv.size_bytes / 1024)} KB)</span>
                       </div>
                       <Download className="w-3.5 h-3.5" />
                     </a>
@@ -760,7 +760,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <Palette className="w-4 h-4 text-cyan-400" />
-                    Active Branding Specification
+                    {t('reports.activeBrandingSpec', 'Active Branding Specification')}
                   </h3>
                   <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-800 text-slate-300 rounded">
                     {selectedTemplate.id}
@@ -769,27 +769,27 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
                 <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs">
                   <div>
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Document Title</span>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">{t('reports.docTitle', 'Document Title')}</span>
                     <span className="text-slate-200 font-medium">{selectedTemplate.title}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Client / Recipient</span>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">{t('reports.clientRecipient', 'Client / Recipient')}</span>
                     <span className="text-cyan-400 font-medium">
                       {identityOrg || selectedTemplate.prepared_for}
-                      {identityOrg ? <span className="text-[10px] text-cyan-300/70 ml-1.5">(Custom Org)</span> : null}
+                      {identityOrg ? <span className="text-[10px] text-cyan-300/70 ml-1.5">{t('reports.customOrgTag', '(Custom Org)')}</span> : null}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Authoring Entity / Logon</span>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">{t('reports.authorEntity', 'Authoring Entity / Logon')}</span>
                     <span className="text-slate-200 font-medium">
                       {identityLogon || selectedTemplate.prepared_by}
-                      {identityLogon ? <span className="text-[10px] text-slate-400 ml-1.5">(User Logon)</span> : null}
+                      {identityLogon ? <span className="text-[10px] text-slate-400 ml-1.5">{t('reports.userLogonTag', '(User Logon)')}</span> : null}
                     </span>
                   </div>
                 </div>
 
                 <div>
-                  <span className="text-slate-400 block text-[11px] font-bold mb-1.5">Corporate Color Swatches</span>
+                  <span className="text-slate-400 block text-[11px] font-bold mb-1.5">{t('reports.colorSwatches', 'Corporate Color Swatches')}</span>
                   <div className="grid grid-cols-4 gap-2">
                     <div className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-center">
                       <div className="w-full h-4 rounded mb-1" style={{ backgroundColor: selectedTemplate.brand_colors?.primary }} />
@@ -811,7 +811,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                 </div>
 
                 <div className="text-[11px] text-slate-400">
-                  <span className="font-semibold text-slate-300">Confidentiality Notice:</span>
+                  <span className="font-semibold text-slate-300">{t('reports.confidentialityNotice', 'Confidentiality Notice:')}</span>
                   <p className="mt-1 text-slate-500 italic bg-slate-950/60 p-2 rounded border border-slate-800/80">
                     "{selectedTemplate.confidentiality_notice}"
                   </p>
@@ -836,13 +836,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    Organization & User Identity
+                    {t('reports.identityTitle', 'Organization & User Identity')}
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 uppercase">
-                      Report Author & Client
+                      {t('reports.identityBadge', 'Report Author & Client')}
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Configure your user logon, organization name, and corporate logo. These credentials are automatically injected into executive PDF cover pages, Excel audit metadata, and client CSV headers.
+                    {t('reports.identitySubtitle', 'Configure your user logon, organization name, and corporate logo. These credentials are automatically injected into executive PDF cover pages, Excel audit metadata, and client CSV headers.')}
                   </p>
                 </div>
               </div>
@@ -864,7 +864,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                 <div>
                   <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-cyan-400" />
-                    User Logon / Author Name
+                    {t('reports.userLogonLabel', 'User Logon / Author Name')}
                   </label>
                   <input
                     type="text"
@@ -874,13 +874,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     placeholder="e.g. admin or john.doe"
                     className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none transition"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">Appears as <strong>Prepared By / Author</strong> on PDF, Excel & CSV reports.</p>
+                  <p className="text-[10px] text-slate-500 mt-1">{t('reports.userLogonHelp', 'Appears as Prepared By / Author on PDF, Excel & CSV reports.')}</p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-cyan-400" />
-                    Organization / Client Name
+                    {t('reports.orgNameLabel', 'Organization / Client Name')}
                   </label>
                   <input
                     type="text"
@@ -889,13 +889,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     placeholder="e.g. Acme Corporation or SOC Unit"
                     className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none transition"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">Appears as <strong>Prepared For / Client</strong> on title blocks.</p>
+                  <p className="text-[10px] text-slate-500 mt-1">{t('reports.orgNameHelp', 'Appears as Prepared For / Client on title blocks.')}</p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center gap-1.5">
                     <Image className="w-3.5 h-3.5 text-cyan-400" />
-                    Organization Logo (URL or Path)
+                    {t('reports.logoLabel', 'Organization Logo (URL or Path)')}
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -916,13 +916,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                       </div>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1">Logo rendered on executive PDF title page & sheet headers.</p>
+                  <p className="text-[10px] text-slate-500 mt-1">{t('reports.logoHelp', 'Logo rendered on executive PDF title page & sheet headers.')}</p>
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-2">
                 <span className="text-[11px] text-slate-400">
-                  Current report identity: <strong className="text-white">{identityLogon || 'Default Author'}</strong> for <strong className="text-cyan-400">{identityOrg || 'Default Client'}</strong>
+                  {t('reports.currentIdentity', 'Current report identity:')} <strong className="text-white">{identityLogon || 'Default Author'}</strong> for <strong className="text-cyan-400">{identityOrg || 'Default Client'}</strong>
                 </span>
                 <button
                   type="submit"
@@ -930,7 +930,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>{savingIdentity ? 'Saving Identity...' : 'Save Identity & Branding'}</span>
+                  <span>{savingIdentity ? t('reports.savingIdentityBtn', 'Saving Identity...') : t('reports.saveIdentityBtn', 'Save Identity & Branding')}</span>
                 </button>
               </div>
             </form>
@@ -938,8 +938,8 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
 
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-white">Configured Branding Templates</h2>
-              <p className="text-xs text-slate-400">Manage client white-labeling, brand palettes, logos, and custom typography.</p>
+              <h2 className="text-base font-bold text-white">{t('reports.configuredTemplates', 'Configured Branding Templates')}</h2>
+              <p className="text-xs text-slate-400">{t('reports.configuredTemplatesDesc', 'Manage client white-labeling, brand palettes, logos, and custom typography.')}</p>
             </div>
             <button
               onClick={() => {
@@ -971,7 +971,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
               className="px-3.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Create New Template</span>
+              <span>{t('reports.createNewTemplate', 'Create New Template')}</span>
             </button>
           </div>
 
@@ -1022,14 +1022,14 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                     }}
                     className="flex-1 py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition"
                   >
-                    Edit Template
+                    {t('reports.editTemplate', 'Edit Template')}
                   </button>
 
                   {!['default', 'acme_branded'].includes(tpl.id) && (
                     <button
                       onClick={() => handleDeleteTemplate(tpl.id)}
                       className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition"
-                      title="Delete Template"
+                      title={t('reports.deleteTemplate', 'Delete Template')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1050,16 +1050,16 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <Clock className="w-4 h-4 text-cyan-400" />
-                Audit Report Generation History
+                {t('reports.historyTitle', 'Audit Report Generation History')}
               </h2>
-              <p className="text-xs text-slate-400">Complete immutable record of all compiled DMARC executive reports.</p>
+              <p className="text-xs text-slate-400">{t('reports.historySubtitle', 'Complete immutable record of all compiled DMARC executive reports.')}</p>
             </div>
             <button
               onClick={loadHistory}
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loadingHistory ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
+              <span>{t('common.refresh', 'Refresh')}</span>
             </button>
           </div>
 
@@ -1067,19 +1067,19 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-400 uppercase font-semibold text-[11px]">
-                  <th className="py-3 px-3">Timestamp (UTC)</th>
-                  <th className="py-3 px-3">Scope / Domain</th>
-                  <th className="py-3 px-3">Branding Template</th>
-                  <th className="py-3 px-3">Generated By</th>
-                  <th className="py-3 px-3">Metrics Snapshot</th>
-                  <th className="py-3 px-3 text-right">Download Assets</th>
+                  <th className="py-3 px-3">{t('reports.colTime', 'Timestamp (UTC)')}</th>
+                  <th className="py-3 px-3">{t('reports.colScope', 'Scope / Domain')}</th>
+                  <th className="py-3 px-3">{t('reports.colTemplate', 'Branding Template')}</th>
+                  <th className="py-3 px-3">{t('reports.colAuthor', 'Generated By')}</th>
+                  <th className="py-3 px-3">{t('reports.colMetrics', 'Metrics Snapshot')}</th>
+                  <th className="py-3 px-3 text-right">{t('reports.colAssets', 'Download Assets')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {history.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-slate-500">
-                      No reports generated yet. Use the "Generate Report" tab to compile an executive audit.
+                      {t('reports.noHistory', 'No reports generated yet. Use the "Generate Report" tab to compile an executive audit.')}
                     </td>
                   </tr>
                 ) : (
@@ -1154,7 +1154,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                               className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 rounded text-[11px] font-semibold flex items-center gap-1 transition"
                               title="Download CSV"
                             >
-                              <Download className="w-3 h-3 text-blue-400" />
+                              <Download className="w-3.5 h-3.5 text-blue-400" />
                               <span>CSV</span>
                             </a>
                           )}
@@ -1179,11 +1179,11 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
             <form onSubmit={handleCreateSchedule} className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-4">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-cyan-400" />
-                Schedule Recurring Report
+                {t('reports.scheduleTitle', 'Schedule Recurring Report')}
               </h3>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Schedule Name</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">{t('reports.scheduleName', 'Schedule Name')}</label>
                 <input
                   type="text"
                   required
@@ -1195,13 +1195,13 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Target Domain</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">{t('reports.targetDomain', 'Target Domain')}</label>
                 <select
                   value={newSchedule.domain}
                   onChange={(e) => setNewSchedule({ ...newSchedule, domain: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
                 >
-                  <option value="all">All Domains</option>
+                  <option value="all">{t('reports.allDomains', 'All Domains')}</option>
                   {domains.map((d) => (
                     <option key={d} value={d}>
                       {d}
@@ -1211,20 +1211,20 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Cadence / Frequency</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">{t('reports.cadenceFrequency', 'Cadence / Frequency')}</label>
                 <select
                   value={newSchedule.schedule_type}
                   onChange={(e) => setNewSchedule({ ...newSchedule, schedule_type: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
                 >
-                  <option value="daily">Daily (Every morning at 08:00 UTC)</option>
-                  <option value="weekly">Weekly (Every Monday at 08:00 UTC)</option>
-                  <option value="monthly">Monthly (1st of each month)</option>
+                  <option value="daily">{t('reports.cadenceDaily', 'Daily (Every morning at 08:00 UTC)')}</option>
+                  <option value="weekly">{t('reports.cadenceWeekly', 'Weekly (Every Monday at 08:00 UTC)')}</option>
+                  <option value="monthly">{t('reports.cadenceMonthly', 'Monthly (1st of each month)')}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Recipient Emails</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">{t('reports.recipientEmails', 'Recipient Emails')}</label>
                 <input
                   type="text"
                   required
@@ -1236,7 +1236,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Branding Template</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">{t('reports.colTemplate', 'Branding Template')}</label>
                 <select
                   value={newSchedule.template_id}
                   onChange={(e) => setNewSchedule({ ...newSchedule, template_id: e.target.value })}
@@ -1255,7 +1255,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                 className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Save Automated Schedule</span>
+                <span>{t('reports.saveScheduleBtn', 'Save Automated Schedule')}</span>
               </button>
             </form>
           </div>
@@ -1264,11 +1264,11 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
           <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-4">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Calendar className="w-4 h-4 text-cyan-400" />
-              Active Automated Report Jobs
+              {t('reports.activeSchedulesTitle', 'Active Automated Report Jobs')}
             </h3>
 
             {schedules.length === 0 ? (
-              <p className="text-xs text-slate-500 py-6 text-center">No automated schedules currently active.</p>
+              <p className="text-xs text-slate-500 py-6 text-center">{t('reports.noActiveSchedules', 'No automated schedules currently active.')}</p>
             ) : (
               <div className="space-y-3">
                 {schedules.map((sc) => (
@@ -1299,7 +1299,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                         title="Execute this report schedule immediately"
                       >
                         <Play className={`w-3.5 h-3.5 ${runningScheduleId === sc.id ? 'animate-spin' : ''}`} />
-                        <span>{runningScheduleId === sc.id ? 'Executing...' : 'Run Now'}</span>
+                        <span>{runningScheduleId === sc.id ? t('reports.executing', 'Executing...') : t('reports.runNow', 'Run Now')}</span>
                       </button>
                       <button
                         onClick={() => handleDeleteSchedule(sc.id)}

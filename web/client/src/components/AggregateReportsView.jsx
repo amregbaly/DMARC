@@ -95,6 +95,7 @@ export function DonutGauge({ rate = 100, size = 52, strokeWidth = 5, label = nul
 // SplitProgressBar: Stacked Verification Bar (DKIM / SPF)
 // -------------------------------------------------------------
 export function SplitProgressBar({ title, passRate = 100, totalVolume = 0, passedVolume = 0 }) {
+  const { t } = useLanguage();
   const rate = Math.min(100, Math.max(0, Number(passRate) || 0));
   const failRate = Number((100 - rate).toFixed(1));
 
@@ -108,17 +109,17 @@ export function SplitProgressBar({ title, passRate = 100, totalVolume = 0, passe
         <div
           style={{ width: `${rate}%` }}
           className="bg-emerald-500 h-full transition-all duration-500"
-          title={`Aligned: ${rate}%`}
+          title={`${t('reports.aligned', 'Aligned')}: ${rate}%`}
         />
         <div
           style={{ width: `${failRate}%` }}
           className="bg-rose-500/80 h-full transition-all duration-500"
-          title={`Unaligned: ${failRate}%`}
+          title={`${t('reports.unaligned', 'Unaligned')}: ${failRate}%`}
         />
       </div>
       <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
-        <span className="text-emerald-400/90">{rate}% Pass</span>
-        {failRate > 0 && <span className="text-rose-400/90">{failRate}% Fail</span>}
+        <span className="text-emerald-400/90">{rate}% {t('common.pass', 'PASS')}</span>
+        {failRate > 0 && <span className="text-rose-400/90">{failRate}% {t('common.fail', 'FAIL')}</span>}
       </div>
     </div>
   );
@@ -134,6 +135,36 @@ export default function AggregateReportsView({
   onSwitchToGenerate
 }) {
   const { language, t } = useLanguage();
+
+  const getCategoryTagLabel = (tag) => {
+    if (tag === 'DMARC compatible sources') return t('reports.dmarcCompatibleSources', 'DMARC compatible sources');
+    if (tag === 'Forwarded') return t('reports.forwardedSources', 'Forwarded');
+    if (tag === 'Failed') return t('reports.failedSources', 'Failed');
+    return tag;
+  };
+
+  const getResultGroupTitle = (title) => {
+    if (!title) return '';
+    if (title.includes('correct')) return t('reports.resultGroupCorrect', 'DMARC correct - DKIM or SPF aligned');
+    if (title.includes('Authenticated')) return t('reports.resultGroupAuthenticated', 'Authenticated - DKIM or SPF valid');
+    if (title.includes('Invalid')) return t('reports.resultGroupInvalid', 'Invalid flows - DKIM and SPF invalid');
+    return title;
+  };
+
+  const getSubItemName = (name) => {
+    const map = {
+      'SPF aligned': t('reports.subItemSpfAligned', 'SPF aligned'),
+      'DKIM aligned': t('reports.subItemDkimAligned', 'DKIM aligned'),
+      'DKIM forwarded': t('reports.subItemDkimForwarded', 'DKIM forwarded'),
+      'Fully aligned': t('reports.subItemFullyAligned', 'Fully aligned'),
+      'Fully aligned forwarded': t('reports.subItemFullyAlignedForwarded', 'Fully aligned forwarded'),
+      'SPF validated not aligned': t('reports.subItemSpfValidNotAligned', 'SPF validated not aligned'),
+      'DKIM validated not aligned': t('reports.subItemDkimValidNotAligned', 'DKIM validated not aligned'),
+      'DKIM/SPF failed': t('reports.subItemDkimSpfFailed', 'DKIM/SPF failed'),
+      'Failed forwarded': t('reports.subItemFailedForwarded', 'Failed forwarded')
+    };
+    return map[name] || name;
+  };
 
   // 8 PowerDMARC subviews:
   // 'new_version' | 'per_source' | 'per_result' | 'per_org' | 'per_host' | 'detailed' | 'geolocation' | 'per_country'
@@ -497,33 +528,33 @@ export default function AggregateReportsView({
             {/* Total Volume */}
             <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-lg">
               <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <span>Total Volume</span>
+                <span>{t('reports.totalVolume', 'Total Volume')}</span>
                 <Radio className="w-4 h-4 text-cyan-400" />
               </div>
               <div className="text-3xl font-black text-white mt-2 font-mono">
                 {summary.totalVolume ? summary.totalVolume.toLocaleString() : '0'}
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">Aggregated email messages</p>
+              <p className="text-[11px] text-slate-500 mt-1">{t('reports.totalVolumeDesc', 'Aggregated email messages')}</p>
             </div>
 
             {/* DMARC Compliant % */}
             <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-slate-900/50 shadow-lg">
               <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <span>DMARC Compliant</span>
+                <span>{t('reports.dmarcCompliant', 'DMARC Compliant')}</span>
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
               </div>
               <div className="text-3xl font-black text-emerald-400 mt-2 font-mono">
                 {summary.complianceRate}%
               </div>
               <p className="text-[11px] text-emerald-400/80 mt-1">
-                {summary.compliantVolume.toLocaleString()} aligned messages
+                {summary.compliantVolume.toLocaleString()} {t('reports.alignedMessages', 'aligned messages')}
               </p>
             </div>
 
             {/* Forwarded % */}
             <div className="glass-panel p-5 rounded-2xl border border-blue-500/30 bg-slate-900/50 shadow-lg">
               <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <span>Forwarded</span>
+                <span>{t('reports.forwarded', 'Forwarded')}</span>
                 <Network className="w-4 h-4 text-blue-400" />
               </div>
               <div className="text-3xl font-black text-blue-400 mt-2 font-mono">
@@ -533,14 +564,14 @@ export default function AggregateReportsView({
                 %
               </div>
               <p className="text-[11px] text-blue-300/80 mt-1">
-                {summary.forwardedVolume.toLocaleString()} indirect relays
+                {summary.forwardedVolume.toLocaleString()} {t('reports.indirectRelays', 'indirect relays')}
               </p>
             </div>
 
             {/* Failed % */}
             <div className="glass-panel p-5 rounded-2xl border border-rose-500/30 bg-slate-900/50 shadow-lg">
               <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <span>Failed</span>
+                <span>{t('reports.failed', 'Failed')}</span>
                 <ShieldAlert className="w-4 h-4 text-rose-400" />
               </div>
               <div className="text-3xl font-black text-rose-400 mt-2 font-mono">
@@ -550,7 +581,7 @@ export default function AggregateReportsView({
                 %
               </div>
               <p className="text-[11px] text-rose-400/80 mt-1">
-                {summary.failedVolume.toLocaleString()} unaligned / threats
+                {summary.failedVolume.toLocaleString()} {t('reports.unalignedThreats', 'unaligned / threats')}
               </p>
             </div>
           </div>
@@ -566,18 +597,18 @@ export default function AggregateReportsView({
                     {t('reports.resultsOverview', 'Results Overview')}
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Daily authentication delivery breakdown across the selected period.
+                    {t('reports.timelineDesc', 'Daily authentication delivery breakdown across the selected period.')}
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] font-medium">
                   <span className="flex items-center gap-1.5 text-emerald-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Compliant
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> {t('reports.compliant', 'Compliant')}
                   </span>
                   <span className="flex items-center gap-1.5 text-blue-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Forwarded
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> {t('reports.forwarded', 'Forwarded')}
                   </span>
                   <span className="flex items-center gap-1.5 text-rose-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Failed
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> {t('reports.failed', 'Failed')}
                   </span>
                 </div>
               </div>
@@ -586,7 +617,7 @@ export default function AggregateReportsView({
               <div className="h-56 flex items-end gap-2 pt-6 pb-2 px-2 border-b border-slate-800/80 overflow-x-auto">
                 {timeline.length === 0 ? (
                   <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
-                    No timeline telemetry for the chosen window.
+                    {t('reports.noTimeline', 'No timeline telemetry for the chosen window.')}
                   </div>
                 ) : (
                   timeline.map((point, idx) => {
@@ -602,11 +633,11 @@ export default function AggregateReportsView({
                         {/* Tooltip on hover */}
                         <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-950 border border-slate-700 p-2 rounded-xl text-[10px] shadow-2xl z-20 whitespace-nowrap">
                           <span className="font-bold text-white">{point.date}</span>
-                          <span className="text-emerald-400">Compliant: {point.compliantVolume.toLocaleString()}</span>
-                          <span className="text-blue-400">Forwarded: {point.forwardedVolume.toLocaleString()}</span>
-                          <span className="text-rose-400">Failed: {point.failedVolume.toLocaleString()}</span>
+                          <span className="text-emerald-400">{t('reports.compliant', 'Compliant')}: {point.compliantVolume.toLocaleString()}</span>
+                          <span className="text-blue-400">{t('reports.forwarded', 'Forwarded')}: {point.forwardedVolume.toLocaleString()}</span>
+                          <span className="text-rose-400">{t('reports.failed', 'Failed')}: {point.failedVolume.toLocaleString()}</span>
                           <span className="text-slate-400 border-t border-slate-800 pt-0.5 mt-0.5">
-                            Total: {point.totalVolume.toLocaleString()}
+                            {t('reports.total', 'Total')}: {point.totalVolume.toLocaleString()}
                           </span>
                         </div>
 
@@ -639,11 +670,11 @@ export default function AggregateReportsView({
                   <PieChart className="w-4 h-4 text-cyan-400" />
                   {t('reports.topSendingSources', 'Top Sending Sources')}
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Volume distribution by detected mail service.</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t('reports.volumeDistDesc', 'Volume distribution by detected mail service.')}</p>
               </div>
 
               <div className="py-4 flex flex-col items-center justify-center">
-                <DonutGauge rate={summary.complianceRate} size={84} strokeWidth={8} label="Overall Score" />
+                <DonutGauge rate={summary.complianceRate} size={84} strokeWidth={8} label={t('reports.overallScore', 'Overall Score')} />
               </div>
 
               <div className="space-y-2.5 border-t border-slate-800/80 pt-4">
@@ -672,17 +703,17 @@ export default function AggregateReportsView({
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Server className="w-4 h-4 text-cyan-400" />
-                  Sending Sources Overview
+                  {t('reports.sendingSourcesOverview', 'Sending Sources Overview')}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  High-level breakdown of all email sending vendors identified in DMARC aggregates.
+                  {t('reports.sendingSourcesOverviewDesc', 'High-level breakdown of all email sending vendors identified in DMARC aggregates.')}
                 </p>
               </div>
               <button
                 onClick={() => setSubView('per_source')}
                 className="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
               >
-                <span>View Full Per-Source Explorer</span>
+                <span>{t('reports.viewFullPerSource', 'View Full Per-Source Explorer')}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -690,12 +721,12 @@ export default function AggregateReportsView({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Sending Source</th>
-                    <th className="py-3 px-4">Source Type</th>
-                    <th className="py-3 px-4 text-right">Total Messages</th>
-                    <th className="py-3 px-4 text-center">DMARC Compliant</th>
-                    <th className="py-3 px-4">DKIM Verification</th>
-                    <th className="py-3 px-4">SPF Verification</th>
+                    <th className="py-3 px-4">{t('reports.colSendingSource', 'Sending Source')}</th>
+                    <th className="py-3 px-4">{t('reports.colSourceType', 'Source Type')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colTotalMessages', 'Total Messages')}</th>
+                    <th className="py-3 px-4 text-center">{t('reports.colDmarcCompliant', 'DMARC Compliant')}</th>
+                    <th className="py-3 px-4">{t('reports.colDkimVerification', 'DKIM Verification')}</th>
+                    <th className="py-3 px-4">{t('reports.colSpfVerification', 'SPF Verification')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -712,7 +743,7 @@ export default function AggregateReportsView({
                               : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                           }`}
                         >
-                          {s.categoryTag}
+                          {getCategoryTagLabel(s.categoryTag)}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-bold text-white">
@@ -762,7 +793,7 @@ export default function AggregateReportsView({
               <div className="text-2xl font-black text-white mt-2 font-mono">
                 {sourceStats.compatible.volume.toLocaleString()}
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Authorized email systems passing authentication</p>
+              <p className="text-[10px] text-slate-400 mt-1">{t('reports.authorizedSystemsDesc', 'Authorized email systems passing authentication')}</p>
             </button>
 
             <button
@@ -784,7 +815,7 @@ export default function AggregateReportsView({
               <div className="text-2xl font-black text-white mt-2 font-mono">
                 {sourceStats.forwarded.volume.toLocaleString()}
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Intermediary relays surviving via intact DKIM signatures</p>
+              <p className="text-[10px] text-slate-400 mt-1">{t('reports.intermediaryRelaysDesc', 'Intermediary relays surviving via intact DKIM signatures')}</p>
             </button>
 
             <button
@@ -806,7 +837,7 @@ export default function AggregateReportsView({
               <div className="text-2xl font-black text-white mt-2 font-mono">
                 {sourceStats.failed.volume.toLocaleString()}
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Shadow IT or unauthorized spoofers failing both checks</p>
+              <p className="text-[10px] text-slate-400 mt-1">{t('reports.shadowItDesc', 'Shadow IT or unauthorized spoofers failing both checks')}</p>
             </button>
           </div>
 
@@ -823,7 +854,9 @@ export default function AggregateReportsView({
               />
             </div>
             <div className="text-xs text-slate-400 font-medium">
-              Showing {filteredSources.length} of {sources.length} sending sources
+              {t('reports.showingSources', 'Showing {filtered} of {total} sending sources')
+                .replace('{filtered}', filteredSources.length)
+                .replace('{total}', sources.length)}
             </div>
           </div>
 
@@ -834,19 +867,19 @@ export default function AggregateReportsView({
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
                     <th className="py-3 px-4 w-10"></th>
-                    <th className="py-3 px-4">Sending Source</th>
-                    <th className="py-3 px-4">Source Type</th>
-                    <th className="py-3 px-4 text-right">Messages</th>
-                    <th className="py-3 px-4 text-center">DMARC Compliance</th>
-                    <th className="py-3 px-4">DKIM Verification</th>
-                    <th className="py-3 px-4">SPF Verification</th>
+                    <th className="py-3 px-4">{t('reports.colSendingSource', 'Sending Source')}</th>
+                    <th className="py-3 px-4">{t('reports.colSourceType', 'Source Type')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colMessages', 'Messages')}</th>
+                    <th className="py-3 px-4 text-center">{t('reports.colDmarcCompliance', 'DMARC Compliance')}</th>
+                    <th className="py-3 px-4">{t('reports.colDkimVerification', 'DKIM Verification')}</th>
+                    <th className="py-3 px-4">{t('reports.colSpfVerification', 'SPF Verification')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {filteredSources.length === 0 ? (
                     <tr>
                       <td colSpan="7" className="py-8 text-center text-slate-500">
-                        No sending sources match the current filter.
+                        {t('reports.noSourcesMatch', 'No sending sources match the current filter.')}
                       </td>
                     </tr>
                   ) : (
@@ -871,7 +904,7 @@ export default function AggregateReportsView({
                                 <span>{s.sourceName}</span>
                               </div>
                               <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                {s.baseDomain || s.asName || 'Direct Server'}
+                                {s.baseDomain || s.asName || t('reports.directServer', 'Direct Server')}
                               </div>
                             </td>
                             <td className="py-3 px-4">
@@ -884,7 +917,7 @@ export default function AggregateReportsView({
                                     : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                                 }`}
                               >
-                                {s.categoryTag}
+                                {getCategoryTagLabel(s.categoryTag)}
                               </span>
                             </td>
                             <td className="py-3 px-4 text-right font-mono font-bold text-white">
@@ -906,13 +939,13 @@ export default function AggregateReportsView({
                             <tr className="bg-slate-950/80">
                               <td colSpan="7" className="p-4 pl-12 border-b border-slate-800">
                                 <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
+                                   <div className="flex items-center justify-between">
                                     <h5 className="text-xs font-bold text-cyan-300 flex items-center gap-2">
                                       <Network className="w-3.5 h-3.5 text-cyan-400" />
-                                      Sending Hostnames & IP Addresses for {s.sourceName}
+                                      {t('reports.sendingHostsFor', 'Sending Hostnames & IP Addresses for {name}').replace('{name}', s.sourceName)}
                                     </h5>
                                     <span className="text-[10px] text-slate-400">
-                                      {s.hosts?.length || 0} host records
+                                      {t('reports.hostRecordsCount', '{count} host records').replace('{count}', s.hosts?.length || 0)}
                                     </span>
                                   </div>
 
@@ -920,19 +953,19 @@ export default function AggregateReportsView({
                                     <table className="w-full text-left text-xs">
                                       <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider text-[9px] border-b border-slate-800">
                                         <tr>
-                                          <th className="py-2.5 px-3">Sender Hostname</th>
-                                          <th className="py-2.5 px-3">Country & IP Address</th>
-                                          <th className="py-2.5 px-3 text-right">Messages</th>
-                                          <th className="py-2.5 px-3 text-center">Compliant</th>
-                                          <th className="py-2.5 px-3">DKIM Status</th>
-                                          <th className="py-2.5 px-3">SPF Status</th>
+                                          <th className="py-2.5 px-3">{t('reports.colSenderHostname', 'Sender Hostname')}</th>
+                                          <th className="py-2.5 px-3">{t('reports.colCountryIp', 'Country & IP Address')}</th>
+                                          <th className="py-2.5 px-3 text-right">{t('reports.colMessages', 'Messages')}</th>
+                                          <th className="py-2.5 px-3 text-center">{t('reports.colCompliant', 'Compliant')}</th>
+                                          <th className="py-2.5 px-3">{t('reports.colDkimStatus', 'DKIM Status')}</th>
+                                          <th className="py-2.5 px-3">{t('reports.colSpfStatus', 'SPF Status')}</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-slate-800/40 text-slate-300">
                                         {!s.hosts || s.hosts.length === 0 ? (
                                           <tr>
                                             <td colSpan="6" className="py-4 text-center text-slate-500 text-[11px]">
-                                              No individual host IPs recorded for this source.
+                                              {t('reports.noHostIps', 'No individual host IPs recorded for this source.')}
                                             </td>
                                           </tr>
                                         ) : (
@@ -951,11 +984,11 @@ export default function AggregateReportsView({
                                               <td className="py-2.5 px-3 text-center">
                                                 {h.isCompliant ? (
                                                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                                    Yes
+                                                    {t('reports.yes', 'Yes')}
                                                   </span>
                                                 ) : (
                                                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                                                    No
+                                                    {t('reports.no', 'No')}
                                                   </span>
                                                 )}
                                               </td>
@@ -966,7 +999,7 @@ export default function AggregateReportsView({
                                                       h.dkimAligned ? 'bg-emerald-400' : 'bg-rose-400'
                                                     }`}
                                                   />
-                                                  <span>{h.dkimAligned ? 'Aligned' : 'Unaligned'}</span>
+                                                  <span>{h.dkimAligned ? t('reports.aligned', 'Aligned') : t('reports.unaligned', 'Unaligned')}</span>
                                                 </div>
                                               </td>
                                               <td className="py-2.5 px-3">
@@ -976,7 +1009,7 @@ export default function AggregateReportsView({
                                                       h.spfAligned ? 'bg-emerald-400' : 'bg-rose-400'
                                                     }`}
                                                   />
-                                                  <span>{h.spfAligned ? 'Aligned' : 'Unaligned'}</span>
+                                                  <span>{h.spfAligned ? t('reports.aligned', 'Aligned') : t('reports.unaligned', 'Unaligned')}</span>
                                                 </div>
                                               </td>
                                             </tr>
@@ -1017,13 +1050,13 @@ export default function AggregateReportsView({
               </div>
               <div>
                 <h4 className="text-sm font-bold text-white">
-                  🏆 {perResultGroups.correctGroup.title}
+                  🏆 {getResultGroupTitle(perResultGroups.correctGroup.title)}
                 </h4>
                 <div className="text-3xl font-black text-emerald-400 mt-2 font-mono">
                   {perResultGroups.correctGroup.totalVolume.toLocaleString()}
                 </div>
                 <p className="text-xs font-semibold text-emerald-300/80 mt-0.5">
-                  {perResultGroups.correctGroup.percentage}% of total traffic
+                  {perResultGroups.correctGroup.percentage}% {t('reports.ofTotalTraffic', 'of total traffic')}
                 </p>
               </div>
 
@@ -1031,7 +1064,7 @@ export default function AggregateReportsView({
               <div className="border-t border-slate-800/80 pt-3 space-y-2 text-xs">
                 {perResultGroups.correctGroup.subItems.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-none">
-                    <span className="text-slate-300 font-medium">{item.name}</span>
+                    <span className="text-slate-300 font-medium">{getSubItemName(item.name)}</span>
                     <div className="font-mono text-right">
                       <span className="font-bold text-white">{item.count.toLocaleString()}</span>
                       <span className="text-slate-500 text-[10px] ml-1">({item.pct}%)</span>
@@ -1051,13 +1084,13 @@ export default function AggregateReportsView({
               </div>
               <div>
                 <h4 className="text-sm font-bold text-white">
-                  🔑 {perResultGroups.authenticatedGroup.title}
+                  🔑 {getResultGroupTitle(perResultGroups.authenticatedGroup.title)}
                 </h4>
                 <div className="text-3xl font-black text-blue-400 mt-2 font-mono">
                   {perResultGroups.authenticatedGroup.totalVolume.toLocaleString()}
                 </div>
                 <p className="text-xs font-semibold text-blue-300/80 mt-0.5">
-                  {perResultGroups.authenticatedGroup.percentage}% of total traffic
+                  {perResultGroups.authenticatedGroup.percentage}% {t('reports.ofTotalTraffic', 'of total traffic')}
                 </p>
               </div>
 
@@ -1065,7 +1098,7 @@ export default function AggregateReportsView({
               <div className="border-t border-slate-800/80 pt-3 space-y-2 text-xs">
                 {perResultGroups.authenticatedGroup.subItems.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-none">
-                    <span className="text-slate-300 font-medium">{item.name}</span>
+                    <span className="text-slate-300 font-medium">{getSubItemName(item.name)}</span>
                     <div className="font-mono text-right">
                       <span className="font-bold text-white">{item.count.toLocaleString()}</span>
                       <span className="text-slate-500 text-[10px] ml-1">({item.pct}%)</span>
@@ -1085,13 +1118,13 @@ export default function AggregateReportsView({
               </div>
               <div>
                 <h4 className="text-sm font-bold text-white">
-                  ⚠️ {perResultGroups.invalidGroup.title}
+                  ⚠️ {getResultGroupTitle(perResultGroups.invalidGroup.title)}
                 </h4>
                 <div className="text-3xl font-black text-rose-400 mt-2 font-mono">
                   {perResultGroups.invalidGroup.totalVolume.toLocaleString()}
                 </div>
                 <p className="text-xs font-semibold text-rose-300/80 mt-0.5">
-                  {perResultGroups.invalidGroup.percentage}% of total traffic
+                  {perResultGroups.invalidGroup.percentage}% {t('reports.ofTotalTraffic', 'of total traffic')}
                 </p>
               </div>
 
@@ -1099,7 +1132,7 @@ export default function AggregateReportsView({
               <div className="border-t border-slate-800/80 pt-3 space-y-2 text-xs">
                 {perResultGroups.invalidGroup.subItems.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-none">
-                    <span className="text-slate-300 font-medium">{item.name}</span>
+                    <span className="text-slate-300 font-medium">{getSubItemName(item.name)}</span>
                     <div className="font-mono text-right">
                       <span className="font-bold text-white">{item.count.toLocaleString()}</span>
                       <span className="text-slate-500 text-[10px] ml-1">({item.pct}%)</span>
@@ -1114,37 +1147,37 @@ export default function AggregateReportsView({
           <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/50 space-y-4">
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
               <PieChart className="w-4 h-4 text-cyan-400" />
-              Aggregate Authentication Flow Proportions
+              {t('reports.flowProportions', 'Aggregate Authentication Flow Proportions')}
             </h4>
             <div className="h-4 rounded-xl overflow-hidden flex bg-slate-950 border border-slate-800">
               <div
                 style={{ width: `${perResultGroups.correctGroup.percentage}%` }}
                 className="bg-emerald-500 h-full transition-all duration-500"
-                title={`Correct: ${perResultGroups.correctGroup.percentage}%`}
+                title={`${t('reports.dmarcCorrect', 'Correct')}: ${perResultGroups.correctGroup.percentage}%`}
               />
               <div
                 style={{ width: `${perResultGroups.authenticatedGroup.percentage}%` }}
                 className="bg-blue-500 h-full transition-all duration-500"
-                title={`Authenticated unaligned: ${perResultGroups.authenticatedGroup.percentage}%`}
+                title={`${t('reports.authenticatedValid', 'Authenticated unaligned')}: ${perResultGroups.authenticatedGroup.percentage}%`}
               />
               <div
                 style={{ width: `${perResultGroups.invalidGroup.percentage}%` }}
                 className="bg-rose-500 h-full transition-all duration-500"
-                title={`Invalid flows: ${perResultGroups.invalidGroup.percentage}%`}
+                title={`${t('reports.invalidFlows', 'Invalid flows')}: ${perResultGroups.invalidGroup.percentage}%`}
               />
             </div>
             <div className="flex flex-wrap items-center gap-6 text-xs font-medium text-slate-300">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span>DMARC Correct ({perResultGroups.correctGroup.percentage}%)</span>
+                <span>{t('reports.dmarcCorrect', 'DMARC Correct')} ({perResultGroups.correctGroup.percentage}%)</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-blue-500" />
-                <span>Authenticated Valid ({perResultGroups.authenticatedGroup.percentage}%)</span>
+                <span>{t('reports.authenticatedValid', 'Authenticated Valid')} ({perResultGroups.authenticatedGroup.percentage}%)</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-rose-500" />
-                <span>Invalid Flows ({perResultGroups.invalidGroup.percentage}%)</span>
+                <span>{t('reports.invalidFlows', 'Invalid Flows')} ({perResultGroups.invalidGroup.percentage}%)</span>
               </div>
             </div>
           </div>
@@ -1163,12 +1196,12 @@ export default function AggregateReportsView({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search reporting mailbox providers..."
+                placeholder={t('reports.searchMailboxProviders', 'Search reporting mailbox providers...')}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
               />
             </div>
             <div className="text-xs text-slate-400 font-medium">
-              Showing {filteredOrgs.length} reporting organizations
+              {t('reports.showingOrgs', 'Showing {count} reporting organizations').replace('{count}', filteredOrgs.length)}
             </div>
           </div>
 
@@ -1177,20 +1210,20 @@ export default function AggregateReportsView({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Reporting Organization</th>
-                    <th className="py-3 px-4 text-right">Messages</th>
-                    <th className="py-3 px-4 text-center">Unique IPs</th>
-                    <th className="py-3 px-4 text-center">DMARC Compliance</th>
-                    <th className="py-3 px-4">DKIM Verification</th>
-                    <th className="py-3 px-4">SPF Verification</th>
-                    <th className="py-3 px-4">Dispositions</th>
+                    <th className="py-3 px-4">{t('reports.colReportingOrg', 'Reporting Organization')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colMessages', 'Messages')}</th>
+                    <th className="py-3 px-4 text-center">{t('reports.colUniqueIps', 'Unique IPs')}</th>
+                    <th className="py-3 px-4 text-center">{t('reports.colDmarcCompliance', 'DMARC Compliance')}</th>
+                    <th className="py-3 px-4">{t('reports.colDkimVerification', 'DKIM Verification')}</th>
+                    <th className="py-3 px-4">{t('reports.colSpfVerification', 'SPF Verification')}</th>
+                    <th className="py-3 px-4">{t('reports.colDispositions', 'Dispositions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {filteredOrgs.length === 0 ? (
                     <tr>
                       <td colSpan="7" className="py-8 text-center text-slate-500">
-                        No organization reports match the current filter.
+                        {t('reports.noOrgsMatch', 'No organization reports match the current filter.')}
                       </td>
                     </tr>
                   ) : (
@@ -1261,7 +1294,7 @@ export default function AggregateReportsView({
                 <div className="text-2xl font-black text-white mt-1 font-mono">
                   {summary.compliantVolume.toLocaleString()}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Passing domain alignment</p>
+                <p className="text-[10px] text-slate-400 mt-1">{t('reports.passingAlignment', 'Passing domain alignment')}</p>
               </div>
               <DonutGauge rate={summary.complianceRate} size={58} strokeWidth={5} />
             </div>
@@ -1274,7 +1307,7 @@ export default function AggregateReportsView({
                 <div className="text-2xl font-black text-white mt-1 font-mono">
                   {summary.forwardedVolume.toLocaleString()}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Valid key / relay flow</p>
+                <p className="text-[10px] text-slate-400 mt-1">{t('reports.validRelayFlow', 'Valid key / relay flow')}</p>
               </div>
               <DonutGauge
                 rate={
@@ -1295,7 +1328,7 @@ export default function AggregateReportsView({
                 <div className="text-2xl font-black text-white mt-1 font-mono">
                   {summary.threatVolume.toLocaleString()}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Impersonation / spoofed</p>
+                <p className="text-[10px] text-slate-400 mt-1">{t('reports.impersonationSpoofed', 'Impersonation / spoofed')}</p>
               </div>
               <DonutGauge
                 rate={
@@ -1317,12 +1350,12 @@ export default function AggregateReportsView({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search sending host IP, PTR, country..."
+                placeholder={t('reports.searchHostsPlaceholder', 'Search sending host IP, PTR, country...')}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
               />
             </div>
             <div className="text-xs text-slate-400 font-medium">
-              Showing {filteredHosts.length} sending hosts
+              {t('reports.showingHosts', 'Showing {count} sending hosts').replace('{count}', filteredHosts.length)}
             </div>
           </div>
 
@@ -1332,27 +1365,27 @@ export default function AggregateReportsView({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Hostname (PTR)</th>
-                    <th className="py-3 px-4">Country & Sending IP</th>
-                    <th className="py-3 px-4 text-right">Messages</th>
-                    <th className="py-3 px-4 text-center">DMARC Compliance</th>
-                    <th className="py-3 px-4">DKIM Verification</th>
-                    <th className="py-3 px-4">SPF Verification</th>
-                    <th className="py-3 px-4 text-right">Receiver Policy</th>
+                    <th className="py-3 px-4">{t('reports.colHostnamePtr', 'Hostname (PTR)')}</th>
+                    <th className="py-3 px-4">{t('reports.colCountrySendingIp', 'Country & Sending IP')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colMessages', 'Messages')}</th>
+                    <th className="py-3 px-4 text-center">{t('reports.colDmarcCompliance', 'DMARC Compliance')}</th>
+                    <th className="py-3 px-4">{t('reports.colDkimVerification', 'DKIM Verification')}</th>
+                    <th className="py-3 px-4">{t('reports.colSpfVerification', 'SPF Verification')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colReceiverPolicy', 'Receiver Policy')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {filteredHosts.length === 0 ? (
                     <tr>
                       <td colSpan="7" className="py-8 text-center text-slate-500">
-                        No sending hosts match the current search.
+                        {t('reports.noHostsMatch', 'No sending hosts match the current search.')}
                       </td>
                     </tr>
                   ) : (
                     filteredHosts.map((h, idx) => (
                       <tr key={idx} className="hover:bg-slate-800/30 transition">
                         <td className="py-3 px-4 font-mono font-medium text-slate-200">
-                          {h.ptr || 'No PTR Record'}
+                          {h.ptr || t('reports.noPtrRecord', 'No PTR Record')}
                         </td>
                         <td className="py-3 px-4 font-mono text-[11px] flex items-center gap-2">
                           <span>{getCountryFlag(h.country)}</span>
@@ -1421,7 +1454,7 @@ export default function AggregateReportsView({
               />
             </div>
             <div className="text-xs text-slate-400 font-medium whitespace-nowrap">
-              Showing {filteredDetailedHits.length} itemized records
+              {t('reports.showingItemized', 'Showing {count} itemized records').replace('{count}', filteredDetailedHits.length)}
             </div>
           </div>
 
@@ -1430,21 +1463,21 @@ export default function AggregateReportsView({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Sender Hostname</th>
-                    <th className="py-3 px-4">Country & IP Address</th>
-                    <th className="py-3 px-4">Reporting Org</th>
-                    <th className="py-3 px-4 text-right">Volume</th>
-                    <th className="py-3 px-4 text-center">Compliant</th>
-                    <th className="py-3 px-4">DKIM Status</th>
-                    <th className="py-3 px-4">SPF Status</th>
-                    <th className="py-3 px-4 text-right">Disposition</th>
+                    <th className="py-3 px-4">{t('reports.colSenderHostname', 'Sender Hostname')}</th>
+                    <th className="py-3 px-4">{t('reports.colCountryIp', 'Country & IP Address')}</th>
+                    <th className="py-3 px-4">{t('reports.colReportingOrg', 'Reporting Org')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colVolume', 'Volume')}</th>
+                    <th className="py-3 px-4 text-center">{t('reports.colCompliant', 'Compliant')}</th>
+                    <th className="py-3 px-4">{t('reports.colDkimStatus', 'DKIM Status')}</th>
+                    <th className="py-3 px-4">{t('reports.colSpfStatus', 'SPF Status')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colDisposition', 'Disposition')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {filteredDetailedHits.length === 0 ? (
                     <tr>
                       <td colSpan="8" className="py-8 text-center text-slate-500">
-                        No itemized records match the current hostname or IP filters.
+                        {t('reports.noItemizedMatch', 'No itemized records match the current hostname or IP filters.')}
                       </td>
                     </tr>
                   ) : (
@@ -1474,11 +1507,11 @@ export default function AggregateReportsView({
                         <td className="py-3 px-4 text-center">
                           {h.compliant ? (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              Yes
+                              {t('reports.yes', 'Yes')}
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                              No
+                              {t('reports.no', 'No')}
                             </span>
                           )}
                         </td>
@@ -1490,7 +1523,7 @@ export default function AggregateReportsView({
                               }`}
                             />
                             <span className={h.dkimAligned ? 'text-emerald-400' : 'text-rose-400'}>
-                              {h.dkimAligned ? 'Aligned' : 'Unaligned'}
+                              {h.dkimAligned ? t('reports.aligned', 'Aligned') : t('reports.unaligned', 'Unaligned')}
                             </span>
                             <span className="text-slate-500">({h.dkimSelector})</span>
                           </div>
@@ -1503,7 +1536,7 @@ export default function AggregateReportsView({
                               }`}
                             />
                             <span className={h.spfAligned ? 'text-emerald-400' : 'text-rose-400'}>
-                              {h.spfAligned ? 'Aligned' : 'Unaligned'}
+                              {h.spfAligned ? t('reports.aligned', 'Aligned') : t('reports.unaligned', 'Unaligned')}
                             </span>
                           </div>
                         </td>
@@ -1533,18 +1566,18 @@ export default function AggregateReportsView({
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Globe2 className="w-4 h-4 text-cyan-400" />
-                  Global Origin Geographic Distribution
+                  {t('reports.geoTitle', 'Global Origin Geographic Distribution')}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Plotted origin coordinates of mail transfer agents delivering mail for monitored domains.
+                  {t('reports.geoSubtitle', 'Plotted origin coordinates of mail transfer agents delivering mail for monitored domains.')}
                 </p>
               </div>
               <div className="flex items-center gap-3 text-xs">
                 <span className="flex items-center gap-1.5 text-emerald-400">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" /> Compliant
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" /> {t('reports.compliant', 'Compliant')}
                 </span>
                 <span className="flex items-center gap-1.5 text-rose-400">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" /> Threat / Failed
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" /> {t('reports.threatFailedLabel', 'Threat / Failed')}
                 </span>
               </div>
             </div>
@@ -1633,9 +1666,9 @@ export default function AggregateReportsView({
                           <span>{pt.ip}</span>
                         </span>
                         <span className="text-slate-400 font-mono">{pt.hostname}</span>
-                        <span className="text-white mt-0.5">Volume: {pt.volume}</span>
+                        <span className="text-white mt-0.5">{t('reports.colVolume', 'Volume')}: {pt.volume}</span>
                         <span className={pt.compliant ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                          {pt.compliant ? 'DMARC Compliant' : 'Failed / Threat'}
+                          {pt.compliant ? t('reports.dmarcCompliant', 'DMARC Compliant') : t('reports.threatFailedLabel', 'Failed / Threat')}
                         </span>
                       </div>
                     </div>
@@ -1650,28 +1683,28 @@ export default function AggregateReportsView({
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <h4 className="text-xs font-bold text-white flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-                Detected Origin Locations & Threat Exposure
+                {t('reports.detectedOriginTitle', 'Detected Origin Locations & Threat Exposure')}
               </h4>
               <span className="text-xs text-slate-400 font-mono">
-                {geoPoints.length} locations plotted
+                {t('reports.locationsPlotted', '{count} locations plotted').replace('{count}', geoPoints.length)}
               </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Country & Flag</th>
-                    <th className="py-3 px-4">IP Address</th>
-                    <th className="py-3 px-4">PTR Hostname</th>
-                    <th className="py-3 px-4 text-right">Messages</th>
-                    <th className="py-3 px-4 text-right">Status</th>
+                    <th className="py-3 px-4">{t('reports.colCountryFlag', 'Country & Flag')}</th>
+                    <th className="py-3 px-4">{t('reports.colIpAddress', 'IP Address')}</th>
+                    <th className="py-3 px-4">{t('reports.colPtrHostname', 'PTR Hostname')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colMessages', 'Messages')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.statusVerdict', 'Status')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {geoPoints.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="py-8 text-center text-slate-500">
-                        No geolocation points available.
+                        {t('reports.noGeoPoints', 'No geolocation points available.')}
                       </td>
                     </tr>
                   ) : (
@@ -1693,11 +1726,11 @@ export default function AggregateReportsView({
                         <td className="py-3 px-4 text-right">
                           {pt.compliant ? (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              Compliant
+                              {t('reports.compliant', 'Compliant')}
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                              Threat
+                              {t('reports.threatLabel', 'Threat')}
                             </span>
                           )}
                         </td>
@@ -1723,12 +1756,12 @@ export default function AggregateReportsView({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search origin country or code..."
+                placeholder={t('reports.searchCountryPlaceholder', 'Search origin country or code...')}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-2 focus:ring-1 focus:ring-cyan-500 placeholder-slate-600"
               />
             </div>
             <div className="text-xs text-slate-400 font-medium">
-              Showing {countries.length} sending countries
+              {t('reports.showingCountries', 'Showing {count} sending countries').replace('{count}', countries.length)}
             </div>
           </div>
 
@@ -1737,20 +1770,20 @@ export default function AggregateReportsView({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Origin Country</th>
-                    <th className="py-3 px-4 text-right">Messages</th>
-                    <th className="py-3 px-4 text-center">Unique IPs</th>
-                    <th className="py-3 px-4 text-center">DMARC Compliance</th>
-                    <th className="py-3 px-4">DKIM Verification</th>
-                    <th className="py-3 px-4">SPF Verification</th>
-                    <th className="py-3 px-4 text-right">Threat Volume</th>
+                    <th className="py-3 px-4">{t('reports.colOriginCountry', 'Origin Country')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colMessages', 'Messages')}</th>
+                    <th className="py-3 px-4 text-center">{t('reports.colUniqueIps', 'Unique IPs')}</th>
+                    <th className="py-3 px-4 text-center">{t('reports.colDmarcCompliance', 'DMARC Compliance')}</th>
+                    <th className="py-3 px-4">{t('reports.colDkimVerification', 'DKIM Verification')}</th>
+                    <th className="py-3 px-4">{t('reports.colSpfVerification', 'SPF Verification')}</th>
+                    <th className="py-3 px-4 text-right">{t('reports.colThreatVolume', 'Threat Volume')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
                   {countries.length === 0 ? (
                     <tr>
                       <td colSpan="7" className="py-8 text-center text-slate-500">
-                        No sending country telemetry for current selection.
+                        {t('reports.noCountriesMatch', 'No sending country telemetry for current selection.')}
                       </td>
                     </tr>
                   ) : (
@@ -1764,7 +1797,7 @@ export default function AggregateReportsView({
                         <tr key={idx} className="hover:bg-slate-800/30 transition">
                           <td className="py-3 px-4 font-bold text-white flex items-center gap-2.5">
                             <span className="text-lg">{getCountryFlag(c.country)}</span>
-                            <span>{c.country === 'Unknown' ? 'Unresolved Country' : c.country}</span>
+                            <span>{c.country === 'Unknown' ? t('reports.unresolvedCountry', 'Unresolved Country') : c.country}</span>
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-white">
                             {c.totalVolume.toLocaleString()}
