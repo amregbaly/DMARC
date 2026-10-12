@@ -18,7 +18,9 @@ import {
   ChevronDown,
   X,
   Settings,
-  Palette
+  Palette,
+  BellRing,
+  Mail
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -51,10 +53,12 @@ export default function Sidebar({
     { id: 'health', label: t('nav.health', 'Domain Health'), icon: HeartPulse },
     { id: 'alignment', label: t('nav.alignment', 'Auth & Alignment'), icon: CheckCircle2 },
     { id: 'threats', label: t('nav.threats', 'Threat Intel & SOC'), icon: ShieldAlert },
+    { id: 'alerts', label: t('nav.alerts', 'Alert Rules & Incidents'), icon: BellRing },
     { id: 'policies', label: t('nav.policies', 'Policies & Readiness'), icon: Sliders },
     { id: 'reports', label: t('nav.reports', 'Reports'), icon: FileText },
     { id: 'records', label: t('nav.records', 'Log Explorer'), icon: Search },
-    ...(canManageUsers ? [{ id: 'users', label: t('nav.users', 'User Access'), icon: Users }] : [])
+    ...(canManageUsers ? [{ id: 'users', label: t('nav.users', 'User Access'), icon: Users }] : []),
+    ...(isAdmin ? [{ id: 'smtp', label: t('nav.smtp', 'Email / SMTP'), icon: Mail }] : [])
   ];
 
   return (

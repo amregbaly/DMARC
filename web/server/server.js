@@ -16,6 +16,24 @@ import https from 'node:https';
 import http from 'node:http';
 import db from './db.js';
 import { generateToken, authenticateToken, requireRole, enforceDomainAccess } from './auth.js';
+import {
+  verifySmtpConnection,
+  sendMailDirect,
+  renderEmail,
+  verifyUnsubscribeToken
+} from './services/emailService.js';
+import {
+  startEmailQueueWorker
+} from './workers/emailQueueWorker.js';
+import {
+  startAlertEvaluator,
+  evaluateRule
+} from './workers/alertEvaluator.js';
+import {
+  startReportScheduler,
+  formatReportEmailData,
+  executeReportGeneration
+} from './workers/reportScheduler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2814,7 +2832,19 @@ app.get('/api/reports/schedules', authenticateToken, async (req, res) => {
 
 app.post('/api/reports/schedules', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
   try {
-    const { name, domain, template_id, schedule_type, recipients, formats } = req.body;
+    const {
+      name,
+      domain,
+      template_id,
+      schedule_type,
+      recipients,
+      formats,
+      time_of_day = '08:00',
+      timezone = 'UTC',
+      send_email = 1,
+      email_format = 'inline_pdf'
+    } = req.body;
+
     if (!name || !recipients) {
       return res.status(400).json({ error: 'Name and recipients are required.' });
     }
@@ -2827,7 +2857,11 @@ app.post('/api/reports/schedules', authenticateToken, requireRole('admin', 'mana
       templateId: template_id || 'default',
       scheduleType: schedule_type || 'weekly',
       recipients,
-      formats: formats || ['pdf']
+      formats: formats || ['pdf'],
+      timeOfDay: time_of_day,
+      timezone,
+      sendEmail: send_email,
+      emailFormat: email_format
     });
     res.json({ status: 'created', schedule: created });
   } catch (err) {
@@ -2947,6 +2981,640 @@ app.get('/api/reports/dashboards-export', authenticateToken, async (req, res) =>
   }
 });
 
+// ==========================================
+// FEATURE 1: SMTP Settings & Audit Logs (Admin)
+// ==========================================
+
+// 1. Get SMTP Settings
+app.get('/api/admin/smtp', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const settings = db.getSmtpSettings({ includeDecrypted: false });
+    res.json(settings);
+  } catch (err) {
+    console.error('Error fetching SMTP settings:', err);
+    res.status(500).json({ error: 'Failed to retrieve SMTP settings.' });
+  }
+});
+
+// 2. Save SMTP Settings
+app.put('/api/admin/smtp', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const {
+      host,
+      port = 587,
+      encryption = 'starttls',
+      username = '',
+      password = '',
+      from_name = 'DMARC Sentinel',
+      from_address = '',
+      reply_to = '',
+      connection_timeout = 10000
+    } = req.body;
+
+    if (!host || !host.trim()) {
+      return res.status(400).json({ error: 'SMTP Host is required.' });
+    }
+    if (!from_address || !from_address.trim()) {
+      return res.status(400).json({ error: 'From Address is required.' });
+    }
+    if (!['none', 'starttls', 'ssl'].includes(encryption)) {
+      return res.status(400).json({ error: 'Encryption must be one of: none, starttls, ssl.' });
+    }
+
+    const saved = db.saveSmtpSettings({
+      host,
+      port,
+      encryption,
+      username,
+      password,
+      from_name,
+      from_address,
+      reply_to,
+      connection_timeout
+    }, { id: req.user.id, username: req.user.username });
+
+    res.json({
+      status: 'success',
+      message: 'SMTP settings updated successfully.',
+      settings: saved
+    });
+  } catch (err) {
+    console.error('Error saving SMTP settings:', err);
+    res.status(500).json({ error: 'Failed to save SMTP settings.' });
+  }
+});
+
+// 3. Send Test Email (Live diagnostics)
+app.post('/api/admin/smtp/test', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { recipient, to, settings: draftSettings } = req.body;
+    const targetEmail = (recipient || to || req.user.email || '').trim();
+
+    if (!targetEmail || !targetEmail.includes('@')) {
+      return res.status(400).json({ error: 'A valid recipient email address is required.' });
+    }
+
+    // Use draft settings if provided, otherwise fetch saved settings
+    let smtpConfig = null;
+    if (draftSettings && draftSettings.host) {
+      smtpConfig = {
+        host: draftSettings.host.trim(),
+        port: parseInt(draftSettings.port, 10) || 587,
+        encryption: draftSettings.encryption || 'starttls',
+        username: draftSettings.username ? draftSettings.username.trim() : '',
+        password: draftSettings.password || '',
+        from_name: draftSettings.from_name || 'DMARC Sentinel',
+        from_address: draftSettings.from_address || draftSettings.username || 'noreply@dmarc.voxera.net',
+        reply_to: draftSettings.reply_to || '',
+        connection_timeout: parseInt(draftSettings.connection_timeout, 10) || 10000
+      };
+    } else {
+      smtpConfig = db.getSmtpSettings({ includeDecrypted: true });
+      if (!smtpConfig.is_configured) {
+        return res.status(400).json({ error: 'SMTP settings are not configured yet. Please configure and save host/from address first.' });
+      }
+    }
+
+    console.log(`[SMTP Test] Sending test email to ${targetEmail} via ${smtpConfig.host}:${smtpConfig.port}...`);
+
+    const { html, text } = renderEmail('test_email', {
+      title: 'DMARC Sentinel SMTP Test',
+      recipientEmail: targetEmail,
+      smtpHost: smtpConfig.host,
+      smtpPort: smtpConfig.port,
+      encryptionMode: smtpConfig.encryption.toUpperCase(),
+      authUsername: smtpConfig.username || '(None / Anonymous)',
+      fromHeader: `"${smtpConfig.from_name}" <${smtpConfig.from_address}>`,
+      serverTimestamp: new Date().toUTCString(),
+      dashboardUrl: process.env.APP_URL || 'https://dmarc.voxera.net'
+    });
+
+    const info = await sendMailDirect({
+      to: targetEmail,
+      subject: `✅ DMARC Sentinel SMTP Test [${new Date().toLocaleTimeString()}]`,
+      html,
+      text,
+      customTransporterConfig: smtpConfig
+    });
+
+    res.json({
+      status: 'success',
+      message: `Test email sent successfully to ${targetEmail}!`,
+      messageId: info.messageId,
+      response: info.response
+    });
+  } catch (err) {
+    console.error('[SMTP Test Error]:', err.message);
+    let friendlyError = err.message;
+    if (err.code === 'ECONNREFUSED') {
+      friendlyError = `Connection refused by ${err.address || 'host'}:${err.port}. Please verify the host and port.`;
+    } else if (err.code === 'ETIMEDOUT') {
+      friendlyError = `Connection timed out. Check firewall, port availability, or timeout settings.`;
+    } else if (err.code === 'EAUTH') {
+      friendlyError = `Authentication failed: Username or password rejected by SMTP server.`;
+    } else if (err.code === 'ESOCKET') {
+      friendlyError = `TLS/SSL handshake failure: ${err.message}.`;
+    }
+
+    res.status(400).json({
+      status: 'error',
+      error: friendlyError,
+      code: err.code || 'SMTP_ERROR',
+      details: err.stack ? err.stack.split('\n')[0] : null
+    });
+  }
+});
+
+// 4. SMTP Audit Logs
+app.get('/api/admin/smtp/audit-logs', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const action = req.query.action || null;
+    const logs = db.getAuditLogs({ limit, offset, action });
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch audit logs.' });
+  }
+});
+
+// ==========================================
+// Admin Email Delivery Logs & Queue
+// ==========================================
+
+app.get('/api/admin/email-logs', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const status = req.query.status || null;
+    const emailType = req.query.email_type || null;
+    const search = req.query.search || null;
+
+    const result = db.getEmailLogs({ limit, offset, status, emailType, search });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve email logs.' });
+  }
+});
+
+app.get('/api/admin/email-queue', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const status = req.query.status || null;
+
+    const result = db.getQueueJobs({ limit, offset, status });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve email queue.' });
+  }
+});
+
+app.post('/api/admin/email-queue/:id/retry', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const ok = db.retryQueueJob(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Queue job not found.' });
+    res.json({ status: 'success', message: 'Job re-queued for immediate delivery.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retry queue job.' });
+  }
+});
+
+// ==========================================
+// FEATURE 2: Alert Rules & Incidents
+// ==========================================
+
+// 1. List Alert Rules
+app.get('/api/alerts/rules', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.role === 'admin' ? null : req.user.id;
+    const rules = db.getAlertRules(userId);
+    res.json(rules);
+  } catch (err) {
+    console.error('Error fetching alert rules:', err);
+    res.status(500).json({ error: 'Failed to fetch alert rules.' });
+  }
+});
+
+// 2. Create Alert Rule
+app.post('/api/alerts/rules', authenticateToken, async (req, res) => {
+  try {
+    const {
+      name,
+      domains = ['all'],
+      recipients = [],
+      condition_type,
+      threshold_value,
+      time_window_minutes = 60,
+      severity = 'warning',
+      cooldown_minutes = 60,
+      digest_mode = 0,
+      notify_recovery = 1,
+      filter_metadata = {}
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Rule name is required.' });
+    }
+
+    const validConditions = [
+      'failure_rate',
+      'new_sender_ip',
+      'quarantine_reject_volume',
+      'alignment_failures',
+      'report_volume_drop',
+      'volume_spike',
+      'disallowed_country_asn'
+    ];
+
+    if (!condition_type || !validConditions.includes(condition_type)) {
+      return res.status(400).json({
+        error: `Invalid condition_type. Must be one of: ${validConditions.join(', ')}`
+      });
+    }
+
+    if (threshold_value === undefined || threshold_value === null || isNaN(Number(threshold_value))) {
+      return res.status(400).json({ error: 'Threshold value must be a valid number.' });
+    }
+
+    // RBAC domain verification
+    let cleanDomains = Array.isArray(domains) ? domains : [domains];
+    if (cleanDomains.length === 0) cleanDomains = ['all'];
+
+    if (req.user.role !== 'admin') {
+      if (cleanDomains.includes('all')) {
+        cleanDomains = req.user.domains && req.user.domains.length > 0 ? req.user.domains : ['all'];
+      } else {
+        const forbidden = cleanDomains.find(d => !req.user.domains.includes(d));
+        if (forbidden) {
+          return res.status(403).json({ error: `Access denied to domain ${forbidden}` });
+        }
+      }
+    }
+
+    const cleanRecipients = Array.isArray(recipients) && recipients.length > 0
+      ? recipients.map(r => r.trim()).filter(r => r.includes('@'))
+      : [req.user.email];
+
+    const rule = db.createAlertRule({
+      userId: req.user.id,
+      name: name.trim(),
+      domains: cleanDomains,
+      recipients: cleanRecipients,
+      conditionType: condition_type,
+      thresholdValue: Number(threshold_value),
+      timeWindowMinutes: parseInt(time_window_minutes, 10) || 60,
+      severity: ['info', 'warning', 'critical'].includes(severity) ? severity : 'warning',
+      cooldownMinutes: parseInt(cooldown_minutes, 10) || 60,
+      digestMode: digest_mode ? 1 : 0,
+      notifyRecovery: notify_recovery !== 0 ? 1 : 0,
+      filterMetadata: filter_metadata || {}
+    });
+
+    res.status(201).json(rule);
+  } catch (err) {
+    console.error('Error creating alert rule:', err);
+    res.status(500).json({ error: 'Failed to create alert rule.' });
+  }
+});
+
+// 3. Get Single Alert Rule
+app.get('/api/alerts/rules/:id', authenticateToken, async (req, res) => {
+  try {
+    const rule = db.getAlertRuleById(req.params.id);
+    if (!rule) return res.status(404).json({ error: 'Alert rule not found.' });
+
+    if (req.user.role !== 'admin' && rule.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    res.json(rule);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch alert rule.' });
+  }
+});
+
+// 4. Update Alert Rule
+app.put('/api/alerts/rules/:id', authenticateToken, async (req, res) => {
+  try {
+    const existing = db.getAlertRuleById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
+
+    if (req.user.role !== 'admin' && existing.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const {
+      name,
+      domains,
+      recipients,
+      condition_type,
+      threshold_value,
+      time_window_minutes,
+      severity,
+      cooldown_minutes,
+      digest_mode,
+      notify_recovery,
+      is_active,
+      filter_metadata
+    } = req.body;
+
+    const ok = db.updateAlertRule(req.params.id, {
+      name,
+      domains,
+      recipients,
+      conditionType: condition_type,
+      thresholdValue: threshold_value !== undefined ? Number(threshold_value) : undefined,
+      timeWindowMinutes: time_window_minutes,
+      severity,
+      cooldownMinutes: cooldown_minutes,
+      digestMode: digest_mode,
+      notifyRecovery: notify_recovery,
+      isActive: is_active,
+      filterMetadata: filter_metadata
+    });
+
+    if (!ok) return res.status(404).json({ error: 'Failed to update alert rule.' });
+    const updated = db.getAlertRuleById(req.params.id);
+    res.json(updated);
+  } catch (err) {
+    console.error('Error updating alert rule:', err);
+    res.status(500).json({ error: 'Failed to update alert rule.' });
+  }
+});
+
+// 5. Delete Alert Rule
+app.delete('/api/alerts/rules/:id', authenticateToken, async (req, res) => {
+  try {
+    const existing = db.getAlertRuleById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Alert rule not found.' });
+
+    if (req.user.role !== 'admin' && existing.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const ok = db.deleteAlertRule(req.params.id);
+    res.json({ status: 'deleted', id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete alert rule.' });
+  }
+});
+
+// 6. Test / Dry-Run Alert Rule against live OpenSearch data
+app.post('/api/alerts/rules/test', authenticateToken, async (req, res) => {
+  try {
+    const {
+      condition_type,
+      threshold_value,
+      time_window_minutes = 60,
+      domains = ['all'],
+      filter_metadata = {}
+    } = req.body;
+
+    if (!condition_type || threshold_value === undefined) {
+      return res.status(400).json({ error: 'condition_type and threshold_value are required for testing.' });
+    }
+
+    const dummyRule = {
+      id: 'dry-run',
+      name: 'Dry Run Test',
+      condition_type,
+      threshold_value: Number(threshold_value),
+      time_window_minutes: parseInt(time_window_minutes, 10) || 60,
+      domains: Array.isArray(domains) ? domains : [domains],
+      filter_metadata: filter_metadata || {},
+      severity: 'warning'
+    };
+
+    const evalResult = await evaluateRule(dummyRule, queryOpenSearch);
+
+    res.json({
+      status: 'success',
+      triggered: evalResult.triggered,
+      condition_type,
+      current_value: evalResult.currentValue,
+      threshold_value: evalResult.thresholdValue,
+      condition_label: evalResult.conditionLabel,
+      message: evalResult.message,
+      threshold_formatted: evalResult.thresholdFormatted,
+      current_formatted: evalResult.currentFormatted,
+      offenders: evalResult.offenders || []
+    });
+  } catch (err) {
+    console.error('Error in alert dry run test:', err);
+    res.status(500).json({ error: `Dry run evaluation failed: ${err.message}` });
+  }
+});
+
+// 7. Test an existing rule by ID
+app.post('/api/alerts/rules/:id/test', authenticateToken, async (req, res) => {
+  try {
+    const rule = db.getAlertRuleById(req.params.id);
+    if (!rule) return res.status(404).json({ error: 'Alert rule not found.' });
+
+    if (req.user.role !== 'admin' && rule.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const evalResult = await evaluateRule(rule, queryOpenSearch);
+
+    res.json({
+      status: 'success',
+      rule_id: rule.id,
+      rule_name: rule.name,
+      triggered: evalResult.triggered,
+      condition_type: rule.condition_type,
+      current_value: evalResult.currentValue,
+      threshold_value: evalResult.thresholdValue,
+      message: evalResult.message,
+      offenders: evalResult.offenders || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: `Rule evaluation failed: ${err.message}` });
+  }
+});
+
+// 8. Incident History & Telemetry
+app.get('/api/alerts/history', authenticateToken, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const severity = req.query.severity || null;
+    const userDomains = req.user.role === 'admin' ? null : req.user.domains;
+
+    const history = db.getAlertHistory({ limit, offset, severity, userDomains });
+    res.json(history);
+  } catch (err) {
+    console.error('Error fetching alert history:', err);
+    res.status(500).json({ error: 'Failed to fetch alert history.' });
+  }
+});
+
+// ==========================================
+// FEATURE 3: On-Demand Report Emailing
+// ==========================================
+
+app.post('/api/reports/send-email', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const {
+      domain = 'all',
+      recipients,
+      formats = ['pdf'],
+      template_id = 'default',
+      date_from,
+      date_to,
+      organization_name,
+      logo_url,
+      report_name
+    } = req.body;
+
+    if (!recipients) {
+      return res.status(400).json({ error: 'Recipient email address(es) required.' });
+    }
+
+    const recipientList = (Array.isArray(recipients) ? recipients : String(recipients).split(/[,;\s]+/))
+      .map(r => r.trim())
+      .filter(r => r.includes('@'));
+
+    if (recipientList.length === 0) {
+      return res.status(400).json({ error: 'At least one valid recipient email address is required.' });
+    }
+
+    // RBAC check
+    if (domain !== 'all' && req.user.role !== 'admin' && Array.isArray(req.user.domains) && !req.user.domains.includes(domain)) {
+      return res.status(403).json({ error: `Access denied to domain ${domain}` });
+    }
+
+    const targetOrg = (organization_name !== undefined ? organization_name : (req.user.organization_name || '')).trim();
+    const targetUser = (req.user.username || '').trim();
+    const targetLogo = (logo_url !== undefined ? logo_url : (req.user.logo_url || '')).trim();
+    const targetName = report_name || `DMARC Executive Report - ${domain}`;
+
+    console.log(`[Report Email] Generating on-demand report for ${domain} (${recipientList.join(', ')})...`);
+
+    const result = await executeReportGeneration({
+      domain,
+      templateId: template_id,
+      formats,
+      dateFrom: date_from,
+      dateTo: date_to,
+      clientOrg: targetOrg,
+      userLogon: targetUser,
+      logo: targetLogo,
+      allowedDomains: req.user.role !== 'admin' ? req.user.domains : null
+    });
+
+    const reportId = crypto.randomUUID();
+    db.addReportHistory({
+      id: reportId,
+      userId: req.user.id,
+      username: req.user.username,
+      domain,
+      templateId: template_id,
+      templateName: result.template || template_id,
+      formats,
+      status: 'completed',
+      files: result.files || {},
+      summaryJson: result.summary || {}
+    });
+
+    const { templateData, attachments } = formatReportEmailData({
+      reportName: targetName,
+      domain,
+      dateRange: date_from && date_to ? `${date_from} to ${date_to}` : 'All Time',
+      summary: result.summary,
+      generatedFiles: result.files,
+      userId: req.user.id
+    });
+
+    const { html, text } = renderEmail('dmarc_report', templateData);
+    const subject = `📊 [DMARC Report] ${targetName} (${domain})`;
+
+    for (const recipient of recipientList) {
+      db.enqueueEmail({
+        recipient,
+        subject,
+        bodyHtml: html,
+        bodyText: text,
+        attachments,
+        emailType: 'report',
+        priority: 7
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: `Report generated and enqueued for delivery to ${recipientList.join(', ')}`,
+      report_id: reportId,
+      recipients: recipientList,
+      files: result.files
+    });
+  } catch (err) {
+    console.error('Error generating and sending report by email:', err);
+    res.status(500).json({ error: `Failed to send report email: ${err.message}` });
+  }
+});
+
+// ==========================================
+// FEATURE 4: One-Click Unsubscribe
+// ==========================================
+
+app.get('/api/reports/unsubscribe/:token', async (req, res) => {
+  const token = req.params.token;
+  const decoded = verifyUnsubscribeToken(token);
+
+  const baseHtml = (content) => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>DMARC Sentinel - Notification Preferences</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b1120; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { max-width: 480px; width: 90%; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 36px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+        .btn { display: inline-block; background: #0284c7; color: #fff; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; margin-top: 24px; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        ${content}
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (!decoded) {
+    return res.status(400).send(baseHtml(`
+      <div style="font-size: 40px; margin-bottom: 16px;">⚠️</div>
+      <h2 style="margin: 0 0 12px 0;">Invalid or Expired Link</h2>
+      <p style="color: #94a3b8; font-size: 14px; line-height: 1.6;">The unsubscribe link is invalid or has expired. Please manage your notification settings from the Sentinel dashboard.</p>
+      <a href="/" class="btn">Go to Dashboard</a>
+    `));
+  }
+
+  try {
+    if (decoded.type === 'alert') {
+      db.updateAlertRule(decoded.targetId, { isActive: 0 });
+    } else if (decoded.type === 'report_schedule') {
+      db.updateReportSchedule(decoded.targetId, { isActive: 0, sendEmail: 0 });
+    }
+
+    res.send(baseHtml(`
+      <div style="font-size: 40px; margin-bottom: 16px;">✅</div>
+      <h2 style="margin: 0 0 12px 0;">Successfully Unsubscribed</h2>
+      <p style="color: #94a3b8; font-size: 14px; line-height: 1.6;">You have been unsubscribed from these automated DMARC notifications. You can re-enable alerts or report schedules at any time in the dashboard.</p>
+      <a href="/" class="btn">Return to Dashboard</a>
+    `));
+  } catch (err) {
+    res.status(500).send(baseHtml(`
+      <div style="font-size: 40px; margin-bottom: 16px;">❌</div>
+      <h2 style="margin: 0 0 12px 0;">Unsubscribe Error</h2>
+      <p style="color: #94a3b8; font-size: 14px; line-height: 1.6;">An error occurred while updating your preferences.</p>
+      <a href="/" class="btn">Go to Dashboard</a>
+    `));
+  }
+});
+
 // Serve static frontend bundle if built
 const clientDistPath = path.resolve(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
@@ -2968,5 +3636,15 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`DMARC API Backend listening on http://localhost:${PORT}`);
+
+  // Start background workers
+  try {
+    startEmailQueueWorker(5000);
+    startAlertEvaluator(queryOpenSearch, 60000);
+    startReportScheduler(60000);
+    console.log('✅ Background email worker, alert evaluator, and report scheduler initialized.');
+  } catch (workerErr) {
+    console.error('Failed to start background workers:', workerErr);
+  }
 });
 

@@ -24,7 +24,8 @@ import {
   Image,
   Save,
   Layers,
-  Play
+  Play,
+  Mail
 } from 'lucide-react';
 import {
   fetchReportTemplates,
@@ -38,7 +39,8 @@ import {
   deleteReportSchedule,
   getDownloadReportUrl,
   downloadReportFile,
-  updateProfile
+  updateProfile,
+  sendReportByEmail
 } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 import AggregateReportsView from './AggregateReportsView';
@@ -82,10 +84,74 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
     domain: 'all',
     template_id: 'default',
     schedule_type: 'weekly',
-    recipients: '',
-    formats: ['pdf', 'xlsx']
+    recipients: currentUser?.email || '',
+    formats: ['pdf'],
+    send_email: 1,
+    time_of_day: '08:00',
+    timezone: 'UTC'
   });
   const [runningScheduleId, setRunningScheduleId] = useState(null);
+
+  // State: On-demand Email Report Modal
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailModalData, setEmailModalData] = useState({
+    domain: 'all',
+    recipients: currentUser?.email || '',
+    formats: ['pdf'],
+    template_id: 'default',
+    date_from: null,
+    date_to: null,
+    report_name: ''
+  });
+  const [sendingEmailReport, setSendingEmailReport] = useState(false);
+  const [emailReportStatus, setEmailReportStatus] = useState(null);
+
+  function openEmailModal(params = {}) {
+    setEmailModalData({
+      domain: params.domain || reportDomain || 'all',
+      recipients: params.recipients || currentUser?.email || '',
+      formats: params.formats || ['pdf'],
+      template_id: params.template_id || selectedTemplateId || 'default',
+      date_from: params.date_from || (datePreset === 'custom' ? customFrom : null),
+      date_to: params.date_to || (datePreset === 'custom' ? customTo : null),
+      report_name: params.report_name || `DMARC Executive Report - ${params.domain || reportDomain}`
+    });
+    setEmailReportStatus(null);
+    setIsEmailModalOpen(true);
+  }
+
+  async function handleSendEmailReport(e) {
+    if (e) e.preventDefault();
+    if (!emailModalData.recipients || !emailModalData.recipients.includes('@')) {
+      setEmailReportStatus({ type: 'error', message: 'A valid recipient email address is required.' });
+      return;
+    }
+
+    setSendingEmailReport(true);
+    setEmailReportStatus(null);
+    try {
+      const res = await sendReportByEmail({
+        ...emailModalData,
+        organization_name: identityOrg,
+        logo_url: identityLogo
+      });
+      setEmailReportStatus({
+        type: 'success',
+        message: res.message || 'Report queued for delivery. Check your inbox shortly!'
+      });
+      setTimeout(() => {
+        setIsEmailModalOpen(false);
+        loadHistory();
+      }, 2500);
+    } catch (err) {
+      setEmailReportStatus({
+        type: 'error',
+        message: err.message || 'Failed to dispatch report by email.'
+      });
+    } finally {
+      setSendingEmailReport(false);
+    }
+  }
 
   // State: Template Editor Modal
   const [editingTemplate, setEditingTemplate] = useState(null);
@@ -750,6 +816,22 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                       <Download className="w-3.5 h-3.5" />
                     </a>
                   )}
+
+                  <div className="pt-2 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      onClick={() => openEmailModal({
+                        domain: generatedResult.domain,
+                        template_id: selectedTemplateId,
+                        formats: Object.keys(generatedResult.files || {}),
+                        report_name: `DMARC Executive Report - ${generatedResult.domain}`
+                      })}
+                      className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-950/50 transition cursor-pointer"
+                    >
+                      <Mail className="w-4 h-4" />
+                      <span>Email This Report</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1158,6 +1240,20 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                               <span>CSV</span>
                             </a>
                           )}
+
+                          <button
+                            onClick={() => openEmailModal({
+                              domain: item.domain,
+                              template_id: item.template_id,
+                              formats: item.formats,
+                              report_name: `${item.template_name || 'DMARC Report'} - ${item.domain}`
+                            })}
+                            className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 rounded text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                            title="Email Report"
+                          >
+                            <Mail className="w-3 h-3 text-cyan-400" />
+                            <span>Email</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1234,6 +1330,46 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                   className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
                 />
               </div>
+
+              {/* Time of Day & Timezone */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Time of Day</label>
+                  <input
+                    type="time"
+                    value={newSchedule.time_of_day || '08:00'}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, time_of_day: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Timezone</label>
+                  <select
+                    value={newSchedule.timezone || 'UTC'}
+                    onChange={(e) => setNewSchedule({ ...newSchedule, timezone: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
+                  >
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">US Eastern (EST/EDT)</option>
+                    <option value="America/Chicago">US Central (CST/CDT)</option>
+                    <option value="America/Los_Angeles">US Pacific (PST/PDT)</option>
+                    <option value="Europe/London">UK / London (GMT/BST)</option>
+                    <option value="Europe/Paris">Europe / Paris (CET/CEST)</option>
+                    <option value="Asia/Tokyo">Japan (JST)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Send Email toggle */}
+              <label className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newSchedule.send_email === 1 || newSchedule.send_email === true}
+                  onChange={(e) => setNewSchedule({ ...newSchedule, send_email: e.target.checked ? 1 : 0 })}
+                  className="accent-cyan-500"
+                />
+                <span className="font-semibold text-white">Dispatch by Outgoing Email on Schedule</span>
+              </label>
 
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1">{t('reports.colTemplate', 'Branding Template')}</label>
@@ -1487,6 +1623,127 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                   className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg transition cursor-pointer"
                 >
                   Save Branding Template
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 5. ON-DEMAND EMAIL REPORT MODAL */}
+      {/* ======================================================== */}
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Mail className="w-5 h-5 text-cyan-400" />
+                Dispatch Report via Outgoing Email
+              </h3>
+              <button
+                onClick={() => setIsEmailModalOpen(false)}
+                className="text-slate-500 hover:text-slate-300 text-xl cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 text-xs space-y-1">
+              <div className="text-slate-400">
+                Scope: <strong className="text-white">{emailModalData.domain?.toUpperCase()}</strong>
+              </div>
+              <div className="text-slate-400">
+                Template: <strong className="text-cyan-400">{emailModalData.template_id}</strong>
+              </div>
+              {emailModalData.date_from && emailModalData.date_to && (
+                <div className="text-slate-400">
+                  Window: <span className="text-slate-200">{emailModalData.date_from} to {emailModalData.date_to}</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSendEmailReport} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Recipient Email Addresses (comma-separated) <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={emailModalData.recipients}
+                  onChange={(e) => setEmailModalData({ ...emailModalData, recipients: e.target.value })}
+                  placeholder="executive@example.com, auditor@example.com"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">Attached File Formats</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['pdf', 'xlsx', 'csv'].map((fmt) => {
+                    const isChecked = emailModalData.formats?.includes(fmt);
+                    return (
+                      <label
+                        key={fmt}
+                        className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-semibold uppercase cursor-pointer transition ${
+                          isChecked
+                            ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300'
+                            : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const newFmts = e.target.checked
+                              ? [...emailModalData.formats, fmt]
+                              : emailModalData.formats.filter((f) => f !== fmt);
+                            setEmailModalData({ ...emailModalData, formats: newFmts });
+                          }}
+                          className="accent-cyan-500"
+                        />
+                        <span>{fmt}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {emailReportStatus && (
+                <div
+                  className={`p-3 rounded-xl text-xs border ${
+                    emailReportStatus.type === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                  }`}
+                >
+                  {emailReportStatus.message}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEmailModalOpen(false)}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingEmailReport}
+                  className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-cyan-950 transition cursor-pointer disabled:opacity-50"
+                >
+                  {sendingEmailReport ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Compiling & Dispatching...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" /> Enqueue Report Email
+                    </>
+                  )}
                 </button>
               </div>
             </form>

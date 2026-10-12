@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { encrypt, decrypt, maskSecret } from './services/crypto.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,9 +67,114 @@ export function initDb() {
       schedule_type TEXT NOT NULL,
       recipients TEXT NOT NULL,
       formats TEXT NOT NULL,
+      time_of_day TEXT NOT NULL DEFAULT '08:00',
+      timezone TEXT NOT NULL DEFAULT 'UTC',
+      send_email INTEGER NOT NULL DEFAULT 0,
+      email_format TEXT NOT NULL DEFAULT 'inline_pdf',
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS smtp_settings (
+      id TEXT PRIMARY KEY DEFAULT 'default',
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL DEFAULT 587,
+      encryption TEXT NOT NULL DEFAULT 'starttls' CHECK(encryption IN ('none', 'starttls', 'ssl')),
+      username TEXT,
+      password_encrypted TEXT,
+      from_name TEXT NOT NULL DEFAULT 'DMARC Sentinel',
+      from_address TEXT NOT NULL,
+      reply_to TEXT,
+      connection_timeout INTEGER NOT NULL DEFAULT 10000,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      username TEXT,
+      action TEXT NOT NULL,
+      details_json TEXT,
+      ip_address TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS email_queue (
+      id TEXT PRIMARY KEY,
+      recipient TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      body_html TEXT NOT NULL,
+      body_text TEXT NOT NULL,
+      attachments_json TEXT,
+      email_type TEXT NOT NULL DEFAULT 'notification',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'sent', 'failed')),
+      priority INTEGER NOT NULL DEFAULT 0,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 3,
+      run_at TEXT NOT NULL,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      sent_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS email_logs (
+      id TEXT PRIMARY KEY,
+      recipient TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      email_type TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('sent', 'failed')),
+      error_message TEXT,
+      attempts INTEGER NOT NULL DEFAULT 1,
+      metadata_json TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS alert_rules (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      domains_json TEXT NOT NULL DEFAULT '["all"]',
+      recipients_json TEXT NOT NULL,
+      condition_type TEXT NOT NULL CHECK(condition_type IN ('failure_rate', 'new_sender_ip', 'quarantine_reject_volume', 'alignment_failures', 'report_volume_drop', 'volume_spike', 'disallowed_country_asn')),
+      threshold_value REAL NOT NULL,
+      time_window_minutes INTEGER NOT NULL DEFAULT 60,
+      severity TEXT NOT NULL DEFAULT 'warning' CHECK(severity IN ('info', 'warning', 'critical')),
+      cooldown_minutes INTEGER NOT NULL DEFAULT 60,
+      digest_mode INTEGER NOT NULL DEFAULT 0,
+      notify_recovery INTEGER NOT NULL DEFAULT 1,
+      filter_metadata_json TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      last_triggered_at TEXT,
+      last_state TEXT NOT NULL DEFAULT 'ok' CHECK(last_state IN ('ok', 'triggered')),
+      last_value REAL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS alert_history (
+      id TEXT PRIMARY KEY,
+      rule_id TEXT REFERENCES alert_rules(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      rule_name TEXT NOT NULL,
+      condition_type TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      triggered_at TEXT NOT NULL,
+      current_value REAL,
+      threshold_value REAL,
+      matched_values_json TEXT,
+      is_recovery INTEGER NOT NULL DEFAULT 0,
+      email_sent INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS alert_digests (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      rule_id TEXT REFERENCES alert_rules(id) ON DELETE CASCADE,
+      alert_history_id TEXT REFERENCES alert_history(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'sent')),
+      created_at TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_users_parent_id ON users(parent_id);
@@ -77,6 +183,16 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_user_domains_domain ON user_domains(domain);
     CREATE INDEX IF NOT EXISTS idx_reports_history_domain ON reports_history(domain);
     CREATE INDEX IF NOT EXISTS idx_reports_history_created_at ON reports_history(created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+    CREATE INDEX IF NOT EXISTS idx_email_queue_status_run_at ON email_queue(status, run_at);
+    CREATE INDEX IF NOT EXISTS idx_email_logs_created_at ON email_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_email_logs_recipient ON email_logs(recipient);
+    CREATE INDEX IF NOT EXISTS idx_alert_rules_user_id ON alert_rules(user_id);
+    CREATE INDEX IF NOT EXISTS idx_alert_rules_is_active ON alert_rules(is_active);
+    CREATE INDEX IF NOT EXISTS idx_alert_history_rule_id ON alert_history(rule_id);
+    CREATE INDEX IF NOT EXISTS idx_alert_history_triggered_at ON alert_history(triggered_at);
+    CREATE INDEX IF NOT EXISTS idx_alert_digests_status ON alert_digests(status, user_id);
   `);
 
   try {
@@ -93,6 +209,18 @@ export function initDb() {
   } catch (e) {}
   try {
     db.prepare('ALTER TABLE reports_schedules ADD COLUMN last_run_at TEXT').run();
+  } catch (e) {}
+  try {
+    db.prepare("ALTER TABLE reports_schedules ADD COLUMN time_of_day TEXT NOT NULL DEFAULT '08:00'").run();
+  } catch (e) {}
+  try {
+    db.prepare("ALTER TABLE reports_schedules ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'").run();
+  } catch (e) {}
+  try {
+    db.prepare('ALTER TABLE reports_schedules ADD COLUMN send_email INTEGER NOT NULL DEFAULT 0').run();
+  } catch (e) {}
+  try {
+    db.prepare("ALTER TABLE reports_schedules ADD COLUMN email_format TEXT NOT NULL DEFAULT 'inline_pdf'").run();
   } catch (e) {}
 
   // Ensure initial admin exists if user table is brand new
@@ -365,11 +493,27 @@ export function getReportHistory(userDomains = null, limit = 50) {
   }));
 }
 
-export function createReportSchedule({ id, userId, name, domain, templateId, scheduleType, recipients, formats }) {
+export function createReportSchedule({
+  id,
+  userId,
+  name,
+  domain,
+  templateId,
+  scheduleType,
+  recipients,
+  formats,
+  timeOfDay = '08:00',
+  timezone = 'UTC',
+  sendEmail = 1,
+  emailFormat = 'inline_pdf'
+}) {
   const now = new Date().toISOString();
   db.prepare(`
-    INSERT INTO reports_schedules (id, user_id, name, domain, template_id, schedule_type, recipients, formats, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    INSERT INTO reports_schedules (
+      id, user_id, name, domain, template_id, schedule_type, recipients, formats,
+      time_of_day, timezone, send_email, email_format, is_active, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `).run(
     id,
     userId,
@@ -379,6 +523,10 @@ export function createReportSchedule({ id, userId, name, domain, templateId, sch
     scheduleType || 'weekly',
     recipients || '',
     JSON.stringify(formats || ['pdf']),
+    timeOfDay || '08:00',
+    timezone || 'UTC',
+    sendEmail !== undefined && sendEmail !== null ? (sendEmail ? 1 : 0) : 1,
+    emailFormat || 'inline_pdf',
     now,
     now
   );
@@ -413,8 +561,682 @@ export function updateReportScheduleLastRun(id, timestamp = new Date().toISOStri
   return db.prepare('UPDATE reports_schedules SET last_run_at = ?, updated_at = ? WHERE id = ?').run(timestamp, timestamp, id).changes > 0;
 }
 
+export function updateReportSchedule(id, updates = {}) {
+  const existing = db.prepare('SELECT * FROM reports_schedules WHERE id = ?').get(id);
+  if (!existing) return false;
+
+  const now = new Date().toISOString();
+  let query = 'UPDATE reports_schedules SET updated_at = ?';
+  const params = [now];
+
+  if (updates.name !== undefined) {
+    query += ', name = ?';
+    params.push(updates.name.trim());
+  }
+  if (updates.domain !== undefined) {
+    query += ', domain = ?';
+    params.push(updates.domain);
+  }
+  if (updates.templateId !== undefined) {
+    query += ', template_id = ?';
+    params.push(updates.templateId);
+  }
+  if (updates.scheduleType !== undefined) {
+    query += ', schedule_type = ?';
+    params.push(updates.scheduleType);
+  }
+  if (updates.recipients !== undefined) {
+    query += ', recipients = ?';
+    params.push(updates.recipients);
+  }
+  if (updates.formats !== undefined) {
+    query += ', formats = ?';
+    params.push(JSON.stringify(updates.formats));
+  }
+  if (updates.isActive !== undefined) {
+    query += ', is_active = ?';
+    params.push(updates.isActive ? 1 : 0);
+  }
+  if (updates.sendEmail !== undefined) {
+    query += ', send_email = ?';
+    params.push(updates.sendEmail ? 1 : 0);
+  }
+  if (updates.timeOfDay !== undefined) {
+    query += ', time_of_day = ?';
+    params.push(updates.timeOfDay);
+  }
+  if (updates.timezone !== undefined) {
+    query += ', timezone = ?';
+    params.push(updates.timezone);
+  }
+  if (updates.emailFormat !== undefined) {
+    query += ', email_format = ?';
+    params.push(updates.emailFormat);
+  }
+
+  query += ' WHERE id = ?';
+  params.push(id);
+
+  return db.prepare(query).run(...params).changes > 0;
+}
+
 export function deleteReportSchedule(id) {
   return db.prepare('DELETE FROM reports_schedules WHERE id = ?').run(id).changes > 0;
+}
+
+// ==========================================
+// SMTP Settings & Audit Logs
+// ==========================================
+
+export function getSmtpSettings({ includeDecrypted = false } = {}) {
+  const row = db.prepare('SELECT * FROM smtp_settings WHERE id = ?').get('default');
+  if (!row) {
+    return {
+      id: 'default',
+      host: '',
+      port: 587,
+      encryption: 'starttls',
+      username: '',
+      password: '',
+      has_password: false,
+      from_name: 'DMARC Sentinel',
+      from_address: '',
+      reply_to: '',
+      connection_timeout: 10000,
+      is_configured: false,
+      updated_at: null
+    };
+  }
+
+  const hasPassword = Boolean(row.password_encrypted);
+  let password = '';
+  if (includeDecrypted && hasPassword) {
+    password = decrypt(row.password_encrypted);
+  } else if (hasPassword) {
+    password = maskSecret(row.password_encrypted);
+  }
+
+  return {
+    id: row.id,
+    host: row.host || '',
+    port: row.port || 587,
+    encryption: row.encryption || 'starttls',
+    username: row.username || '',
+    password,
+    has_password: hasPassword,
+    from_name: row.from_name || 'DMARC Sentinel',
+    from_address: row.from_address || '',
+    reply_to: row.reply_to || '',
+    connection_timeout: row.connection_timeout || 10000,
+    is_configured: Boolean(row.host && row.from_address),
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+export function saveSmtpSettings(settings, actor = {}) {
+  const existing = db.prepare('SELECT * FROM smtp_settings WHERE id = ?').get('default');
+  const now = new Date().toISOString();
+
+  let passwordEncrypted = existing ? existing.password_encrypted : '';
+  if (settings.password && settings.password !== '••••••••' && !settings.password.includes('•••')) {
+    passwordEncrypted = encrypt(settings.password);
+  }
+
+  const cleanHost = (settings.host || '').trim();
+  const cleanPort = parseInt(settings.port, 10) || 587;
+  const cleanEncryption = ['none', 'starttls', 'ssl'].includes(settings.encryption) ? settings.encryption : 'starttls';
+  const cleanUsername = (settings.username || '').trim();
+  const cleanFromName = (settings.from_name || 'DMARC Sentinel').trim();
+  const cleanFromAddress = (settings.from_address || '').trim().toLowerCase();
+  const cleanReplyTo = (settings.reply_to || '').trim().toLowerCase();
+  const cleanTimeout = parseInt(settings.connection_timeout, 10) || 10000;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE smtp_settings
+      SET host = ?, port = ?, encryption = ?, username = ?, password_encrypted = ?,
+          from_name = ?, from_address = ?, reply_to = ?, connection_timeout = ?, updated_at = ?
+      WHERE id = 'default'
+    `).run(
+      cleanHost,
+      cleanPort,
+      cleanEncryption,
+      cleanUsername,
+      passwordEncrypted,
+      cleanFromName,
+      cleanFromAddress,
+      cleanReplyTo,
+      cleanTimeout,
+      now
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO smtp_settings (
+        id, host, port, encryption, username, password_encrypted,
+        from_name, from_address, reply_to, connection_timeout, created_at, updated_at
+      )
+      VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      cleanHost,
+      cleanPort,
+      cleanEncryption,
+      cleanUsername,
+      passwordEncrypted,
+      cleanFromName,
+      cleanFromAddress,
+      cleanReplyTo,
+      cleanTimeout,
+      now,
+      now
+    );
+  }
+
+  // Record audit log without secrets
+  addAuditLog({
+    userId: actor.id || null,
+    username: actor.username || 'system',
+    action: 'smtp.settings_update',
+    details: {
+      host: cleanHost,
+      port: cleanPort,
+      encryption: cleanEncryption,
+      username: cleanUsername,
+      from_name: cleanFromName,
+      from_address: cleanFromAddress,
+      reply_to: cleanReplyTo,
+      password_updated: Boolean(settings.password && settings.password !== '••••••••')
+    },
+    ipAddress: actor.ipAddress || null
+  });
+
+  return getSmtpSettings({ includeDecrypted: false });
+}
+
+export function addAuditLog({ userId, username, action, details = {}, ipAddress = null }) {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO audit_logs (id, user_id, username, action, details_json, ip_address, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    userId || null,
+    username || 'system',
+    action,
+    JSON.stringify(details || {}),
+    ipAddress || null,
+    now
+  );
+  return { id, action, created_at: now };
+}
+
+export function getAuditLogs({ limit = 50, offset = 0, action = null } = {}) {
+  let query = 'SELECT * FROM audit_logs';
+  const params = [];
+  if (action) {
+    query += ' WHERE action = ?';
+    params.push(action);
+  }
+  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const rows = db.prepare(query).all(...params);
+  return rows.map(r => ({
+    ...r,
+    details: JSON.parse(r.details_json || '{}')
+  }));
+}
+
+// ==========================================
+// Email Queue & Email Logs
+// ==========================================
+
+export function enqueueEmail({
+  recipient,
+  subject,
+  bodyHtml,
+  bodyText,
+  attachments = [],
+  emailType = 'notification',
+  priority = 0,
+  runAt = null
+}) {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const scheduleTime = runAt || now;
+
+  db.prepare(`
+    INSERT INTO email_queue (
+      id, recipient, subject, body_html, body_text, attachments_json,
+      email_type, status, priority, attempts, max_attempts, run_at, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, 3, ?, ?)
+  `).run(
+    id,
+    recipient.trim().toLowerCase(),
+    subject.trim(),
+    bodyHtml,
+    bodyText || '',
+    JSON.stringify(attachments || []),
+    emailType,
+    priority,
+    scheduleTime,
+    now
+  );
+
+  return id;
+}
+
+export function claimQueueJobs(limit = 10) {
+  const now = new Date().toISOString();
+  const tx = db.transaction(() => {
+    const jobs = db.prepare(`
+      SELECT * FROM email_queue
+      WHERE status = 'pending' AND run_at <= ? AND attempts < max_attempts
+      ORDER BY priority DESC, run_at ASC, created_at ASC
+      LIMIT ?
+    `).all(now, limit);
+
+    if (jobs.length === 0) return [];
+
+    const jobIds = jobs.map(j => j.id);
+    const placeholders = jobIds.map(() => '?').join(',');
+    db.prepare(`
+      UPDATE email_queue
+      SET status = 'processing', attempts = attempts + 1
+      WHERE id IN (${placeholders})
+    `).run(...jobIds);
+
+    return jobs.map(j => ({
+      ...j,
+      attachments: JSON.parse(j.attachments_json || '[]')
+    }));
+  });
+
+  return tx();
+}
+
+export function updateQueueJob(id, { status, errorMessage = null, nextRunAt = null, sentAt = null }) {
+  let query = 'UPDATE email_queue SET status = ?';
+  const params = [status];
+
+  if (errorMessage !== undefined) {
+    query += ', error_message = ?';
+    params.push(errorMessage);
+  }
+  if (nextRunAt !== undefined) {
+    query += ', run_at = ?';
+    params.push(nextRunAt);
+  }
+  if (sentAt !== undefined) {
+    query += ', sent_at = ?';
+    params.push(sentAt);
+  }
+
+  query += ' WHERE id = ?';
+  params.push(id);
+
+}
+
+export function getQueueJobs({ limit = 50, offset = 0, status = null } = {}) {
+  let query = 'SELECT * FROM email_queue WHERE 1=1';
+  const params = [];
+  if (status) {
+    query += ' AND status = ?';
+    params.push(status);
+  }
+  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const totalCount = db.prepare(`
+    SELECT COUNT(*) as count FROM email_queue WHERE 1=1
+    ${status ? ' AND status = ?' : ''}
+  `).get(...(status ? [status] : [])).count;
+
+  const rows = db.prepare(query).all(...params);
+  return {
+    total: totalCount,
+    jobs: rows.map(r => ({
+      ...r,
+      attachments: JSON.parse(r.attachments_json || '[]')
+    }))
+  };
+}
+
+export function retryQueueJob(id) {
+  const now = new Date().toISOString();
+  return db.prepare(`
+    UPDATE email_queue
+    SET status = 'pending', run_at = ?, attempts = 0, error_message = NULL
+    WHERE id = ?
+  `).run(now, id).changes > 0;
+}
+
+export function addEmailLog({
+  recipient,
+  subject,
+  emailType,
+  status,
+  errorMessage = null,
+  attempts = 1,
+  metadata = {}
+}) {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO email_logs (
+      id, recipient, subject, email_type, status, error_message, attempts, metadata_json, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    recipient.trim().toLowerCase(),
+    subject.trim(),
+    emailType,
+    status,
+    errorMessage || null,
+    attempts,
+    JSON.stringify(metadata || {}),
+    now
+  );
+  return id;
+}
+
+export function getEmailLogs({ limit = 50, offset = 0, status = null, emailType = null, search = null } = {}) {
+  let query = 'SELECT * FROM email_logs WHERE 1=1';
+  const params = [];
+
+  if (status) {
+    query += ' AND status = ?';
+    params.push(status);
+  }
+  if (emailType) {
+    query += ' AND email_type = ?';
+    params.push(emailType);
+  }
+  if (search) {
+    query += ' AND (recipient LIKE ? OR subject LIKE ?)';
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const totalCount = db.prepare(`
+    SELECT COUNT(*) as count FROM email_logs WHERE 1=1
+    ${status ? ' AND status = ?' : ''}
+    ${emailType ? ' AND email_type = ?' : ''}
+    ${search ? ' AND (recipient LIKE ? OR subject LIKE ?)' : ''}
+  `).get(...params.slice(0, params.length - 2)).count;
+
+  const rows = db.prepare(query).all(...params);
+  return {
+    total: totalCount,
+    logs: rows.map(r => ({
+      ...r,
+      metadata: JSON.parse(r.metadata_json || '{}')
+    }))
+  };
+}
+
+// ==========================================
+// Alert Rules & Alert History
+// ==========================================
+
+export function createAlertRule({
+  userId,
+  name,
+  domains = ['all'],
+  recipients = [],
+  conditionType,
+  thresholdValue,
+  timeWindowMinutes = 60,
+  severity = 'warning',
+  cooldownMinutes = 60,
+  digestMode = 0,
+  notifyRecovery = 1,
+  filterMetadata = {}
+}) {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO alert_rules (
+      id, user_id, name, domains_json, recipients_json, condition_type,
+      threshold_value, time_window_minutes, severity, cooldown_minutes,
+      digest_mode, notify_recovery, filter_metadata_json, is_active,
+      last_state, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'ok', ?, ?)
+  `).run(
+    id,
+    userId,
+    name.trim(),
+    JSON.stringify(Array.isArray(domains) ? domains : ['all']),
+    JSON.stringify(Array.isArray(recipients) ? recipients : []),
+    conditionType,
+    parseFloat(thresholdValue) || 0,
+    parseInt(timeWindowMinutes, 10) || 60,
+    ['info', 'warning', 'critical'].includes(severity) ? severity : 'warning',
+    parseInt(cooldownMinutes, 10) || 60,
+    digestMode ? 1 : 0,
+    notifyRecovery ? 1 : 0,
+    JSON.stringify(filterMetadata || {}),
+    now,
+    now
+  );
+
+  return getAlertRuleById(id);
+}
+
+export function getAlertRules(userId = null) {
+  let query = `
+    SELECT ar.*, u.username as owner_username, u.email as owner_email
+    FROM alert_rules ar
+    JOIN users u ON ar.user_id = u.id
+  `;
+  const params = [];
+  if (userId) {
+    query += ' WHERE ar.user_id = ?';
+    params.push(userId);
+  }
+  query += ' ORDER BY ar.created_at DESC';
+
+  const rows = db.prepare(query).all(...params);
+  return rows.map(formatAlertRuleRow);
+}
+
+export function getAlertRuleById(id) {
+  const row = db.prepare(`
+    SELECT ar.*, u.username as owner_username, u.email as owner_email
+    FROM alert_rules ar
+    JOIN users u ON ar.user_id = u.id
+    WHERE ar.id = ?
+  `).get(id);
+
+  if (!row) return null;
+  return formatAlertRuleRow(row);
+}
+
+function formatAlertRuleRow(row) {
+  return {
+    ...row,
+    domains: JSON.parse(row.domains_json || '["all"]'),
+    recipients: JSON.parse(row.recipients_json || '[]'),
+    filter_metadata: JSON.parse(row.filter_metadata_json || '{}'),
+    is_active: Boolean(row.is_active),
+    digest_mode: Boolean(row.digest_mode),
+    notify_recovery: Boolean(row.notify_recovery)
+  };
+}
+
+export function updateAlertRule(id, updates) {
+  const existing = getAlertRuleById(id);
+  if (!existing) return null;
+
+  const now = new Date().toISOString();
+  const name = updates.name !== undefined ? updates.name.trim() : existing.name;
+  const domains = updates.domains !== undefined ? JSON.stringify(updates.domains) : existing.domains_json;
+  const recipients = updates.recipients !== undefined ? JSON.stringify(updates.recipients) : existing.recipients_json;
+  const conditionType = updates.conditionType !== undefined ? updates.conditionType : existing.condition_type;
+  const thresholdValue = updates.thresholdValue !== undefined ? parseFloat(updates.thresholdValue) : existing.threshold_value;
+  const timeWindowMinutes = updates.timeWindowMinutes !== undefined ? parseInt(updates.timeWindowMinutes, 10) : existing.time_window_minutes;
+  const severity = updates.severity !== undefined ? updates.severity : existing.severity;
+  const cooldownMinutes = updates.cooldownMinutes !== undefined ? parseInt(updates.cooldownMinutes, 10) : existing.cooldown_minutes;
+  const digestMode = updates.digestMode !== undefined ? (updates.digestMode ? 1 : 0) : existing.digest_mode ? 1 : 0;
+  const notifyRecovery = updates.notifyRecovery !== undefined ? (updates.notifyRecovery ? 1 : 0) : existing.notify_recovery ? 1 : 0;
+  const isActive = updates.isActive !== undefined ? (updates.isActive ? 1 : 0) : existing.is_active ? 1 : 0;
+  const filterMetadata = updates.filterMetadata !== undefined ? JSON.stringify(updates.filterMetadata) : existing.filter_metadata_json;
+
+  db.prepare(`
+    UPDATE alert_rules
+    SET name = ?, domains_json = ?, recipients_json = ?, condition_type = ?,
+        threshold_value = ?, time_window_minutes = ?, severity = ?, cooldown_minutes = ?,
+        digest_mode = ?, notify_recovery = ?, filter_metadata_json = ?, is_active = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).run(
+    name, domains, recipients, conditionType,
+    thresholdValue, timeWindowMinutes, severity, cooldownMinutes,
+    digestMode, notifyRecovery, filterMetadata, isActive,
+    now, id
+  );
+
+  return getAlertRuleById(id);
+}
+
+export function updateAlertRuleState(id, { lastState, lastTriggeredAt = null, lastValue = null }) {
+  const now = new Date().toISOString();
+  let query = 'UPDATE alert_rules SET last_state = ?, updated_at = ?';
+  const params = [lastState, now];
+
+  if (lastTriggeredAt !== null) {
+    query += ', last_triggered_at = ?';
+    params.push(lastTriggeredAt);
+  }
+  if (lastValue !== null) {
+    query += ', last_value = ?';
+    params.push(lastValue);
+  }
+
+  query += ' WHERE id = ?';
+  params.push(id);
+
+  return db.prepare(query).run(...params).changes > 0;
+}
+
+export function deleteAlertRule(id) {
+  return db.prepare('DELETE FROM alert_rules WHERE id = ?').run(id).changes > 0;
+}
+
+export function addAlertHistory({
+  ruleId,
+  userId,
+  ruleName,
+  conditionType,
+  severity,
+  currentValue,
+  thresholdValue,
+  matchedValues = {},
+  isRecovery = 0,
+  emailSent = 0
+}) {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO alert_history (
+      id, rule_id, user_id, rule_name, condition_type, severity,
+      triggered_at, current_value, threshold_value, matched_values_json,
+      is_recovery, email_sent
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    ruleId,
+    userId,
+    ruleName,
+    conditionType,
+    severity,
+    now,
+    currentValue !== undefined ? currentValue : null,
+    thresholdValue !== undefined ? thresholdValue : null,
+    JSON.stringify(matchedValues || {}),
+    isRecovery ? 1 : 0,
+    emailSent ? 1 : 0
+  );
+
+  return id;
+}
+
+export function getAlertHistory({ userId = null, limit = 50, offset = 0, ruleId = null, severity = null } = {}) {
+  let query = 'SELECT * FROM alert_history WHERE 1=1';
+  const params = [];
+
+  if (userId) {
+    query += ' AND user_id = ?';
+    params.push(userId);
+  }
+  if (ruleId) {
+    query += ' AND rule_id = ?';
+    params.push(ruleId);
+  }
+  if (severity) {
+    query += ' AND severity = ?';
+    params.push(severity);
+  }
+
+  query += ' ORDER BY triggered_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const rows = db.prepare(query).all(...params);
+  return rows.map(r => ({
+    ...r,
+    matched_values: JSON.parse(r.matched_values_json || '{}'),
+    is_recovery: Boolean(r.is_recovery),
+    email_sent: Boolean(r.email_sent)
+  }));
+}
+
+export function addAlertDigestItem({ userId, ruleId, alertHistoryId }) {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO alert_digests (id, user_id, rule_id, alert_history_id, status, created_at)
+    VALUES (?, ?, ?, ?, 'pending', ?)
+  `).run(id, userId, ruleId, alertHistoryId, now);
+  return id;
+}
+
+export function getPendingAlertDigests(userId = null) {
+  let query = `
+    SELECT ad.*, ah.rule_name, ah.condition_type, ah.severity, ah.triggered_at,
+           ah.current_value, ah.threshold_value, ah.matched_values_json,
+           u.email as user_email, u.username as username
+    FROM alert_digests ad
+    JOIN alert_history ah ON ad.alert_history_id = ah.id
+    JOIN users u ON ad.user_id = u.id
+    WHERE ad.status = 'pending'
+  `;
+  const params = [];
+  if (userId) {
+    query += ' AND ad.user_id = ?';
+    params.push(userId);
+  }
+  query += ' ORDER BY ad.created_at ASC';
+
+  const rows = db.prepare(query).all(...params);
+  return rows.map(r => ({
+    ...r,
+    matched_values: JSON.parse(r.matched_values_json || '{}')
+  }));
+}
+
+export function markAlertDigestsSent(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(`UPDATE alert_digests SET status = 'sent' WHERE id IN (${placeholders})`).run(...ids).changes;
 }
 
 export default {
@@ -437,5 +1259,29 @@ export default {
   getReportSchedules,
   getReportScheduleById,
   updateReportScheduleLastRun,
-  deleteReportSchedule
+  updateReportSchedule,
+  deleteReportSchedule,
+  getSmtpSettings,
+  saveSmtpSettings,
+  addAuditLog,
+  getAuditLogs,
+  enqueueEmail,
+  claimQueueJobs,
+  updateQueueJob,
+  getQueueJobs,
+  retryQueueJob,
+  addEmailLog,
+  getEmailLogs,
+  createAlertRule,
+  getAlertRules,
+  getAlertRuleById,
+  updateAlertRule,
+  updateAlertRuleState,
+  deleteAlertRule,
+  addAlertHistory,
+  getAlertHistory,
+  addAlertDigestItem,
+  getPendingAlertDigests,
+  markAlertDigestsSent
 };
+

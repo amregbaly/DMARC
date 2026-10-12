@@ -313,3 +313,138 @@ export async function downloadDashboardsExport() {
   setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
 }
 
+// ==========================================
+// SMTP Settings & Audit Logs (Admin)
+// ==========================================
+
+export async function fetchSmtpSettings() {
+  return authFetch(`${BASE_URL}/admin/smtp`);
+}
+
+export async function saveSmtpSettings(settings) {
+  return authFetch(`${BASE_URL}/admin/smtp`, {
+    method: 'PUT',
+    body: JSON.stringify(settings)
+  });
+}
+
+export async function sendSmtpTestEmail({ recipient, settings = null }) {
+  return authFetch(`${BASE_URL}/admin/smtp/test`, {
+    method: 'POST',
+    body: JSON.stringify({ recipient, settings })
+  });
+}
+
+export async function fetchSmtpAuditLogs({ limit = 50, offset = 0, action = null } = {}) {
+  const params = new URLSearchParams({ limit, offset });
+  if (action) params.append('action', action);
+  return authFetch(`${BASE_URL}/admin/smtp/audit-logs?${params.toString()}`);
+}
+
+// ==========================================
+// Email Delivery Logs & Queue
+// ==========================================
+
+export async function fetchEmailLogs({ limit = 50, offset = 0, status = null, emailType = null, search = null } = {}) {
+  const params = new URLSearchParams({ limit, offset });
+  if (status) params.append('status', status);
+  if (emailType) params.append('email_type', emailType);
+  if (search) params.append('search', search);
+  return authFetch(`${BASE_URL}/admin/email-logs?${params.toString()}`);
+}
+
+export async function fetchEmailQueue({ limit = 50, offset = 0, status = null } = {}) {
+  const params = new URLSearchParams({ limit, offset });
+  if (status) params.append('status', status);
+  return authFetch(`${BASE_URL}/admin/email-queue?${params.toString()}`);
+}
+
+export async function retryEmailQueueJob(id) {
+  return authFetch(`${BASE_URL}/admin/email-queue/${id}/retry`, {
+    method: 'POST'
+  });
+}
+
+// ==========================================
+// Alert Rules & Incidents
+// ==========================================
+
+export async function fetchAlertRules() {
+  return authFetch(`${BASE_URL}/alerts/rules`);
+}
+
+export async function createAlertRule(ruleData) {
+  return authFetch(`${BASE_URL}/alerts/rules`, {
+    method: 'POST',
+    body: JSON.stringify(ruleData)
+  });
+}
+
+export async function fetchAlertRule(id) {
+  return authFetch(`${BASE_URL}/alerts/rules/${id}`);
+}
+
+export async function updateAlertRule(id, ruleData) {
+  return authFetch(`${BASE_URL}/alerts/rules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(ruleData)
+  });
+}
+
+export async function deleteAlertRule(id) {
+  return authFetch(`${BASE_URL}/alerts/rules/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function testAlertRule(ruleData) {
+  return authFetch(`${BASE_URL}/alerts/rules/test`, {
+    method: 'POST',
+    body: JSON.stringify(ruleData)
+  });
+}
+
+export async function testExistingAlertRule(id) {
+  return authFetch(`${BASE_URL}/alerts/rules/${id}/test`, {
+    method: 'POST'
+  });
+}
+
+export async function fetchAlertHistory({ limit = 50, offset = 0, severity = null } = {}) {
+  const params = new URLSearchParams({ limit, offset });
+  if (severity) params.append('severity', severity);
+  return authFetch(`${BASE_URL}/alerts/history?${params.toString()}`);
+}
+
+// ==========================================
+// Report Emailing
+// ==========================================
+
+export async function sendReportByEmail({
+  domain = 'all',
+  recipients,
+  formats = ['pdf'],
+  template_id = 'default',
+  date_from = null,
+  date_to = null,
+  organization_name = null,
+  logo_url = null,
+  report_name = null
+}) {
+  return authFetch(`${BASE_URL}/reports/send-email`, {
+    method: 'POST',
+    body: JSON.stringify({
+      domain,
+      recipients,
+      formats,
+      template_id,
+      date_from,
+      date_to,
+      organization_name,
+      logo_url,
+      report_name
+    })
+  });
+}
+
+

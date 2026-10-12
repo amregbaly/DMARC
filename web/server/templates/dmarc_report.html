@@ -1,0 +1,104 @@
+<div style="margin-bottom: 24px;">
+  <div style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background-color: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);">
+    📊 {{reportTypeTitle}}
+  </div>
+  <h2 style="font-size: 22px; font-weight: 700; color: #f8fafc; margin: 12px 0 4px 0;">
+    {{reportName}}
+  </h2>
+  <div style="font-size: 13px; color: #94a3b8;">
+    Domain: <strong style="color: #38bdf8;">{{domain}}</strong> &bull; Period: <strong>{{dateRange}}</strong>
+  </div>
+</div>
+
+<div class="card" style="padding: 12px;">
+  <div class="metric-grid">
+    <div class="metric-col">
+      <div class="metric-value" style="color: #38bdf8;">{{totalEmailsFormatted}}</div>
+      <div class="metric-label">Total Messages</div>
+    </div>
+    <div class="metric-col">
+      <div class="metric-value" style="color: #34d399;">{{passRateFormatted}}%</div>
+      <div class="metric-label">DMARC Pass Rate</div>
+    </div>
+    <div class="metric-col">
+      <div class="metric-value" style="color: {{#hasFailures}}#f87171{{/hasFailures}}{{^hasFailures}}#94a3b8{{/hasFailures}};">
+        {{failedEmailsFormatted}}
+      </div>
+      <div class="metric-label">Failures Blocked</div>
+    </div>
+  </div>
+</div>
+
+<div style="display: table; width: 100%; margin-bottom: 18px;">
+  <div style="display: table-cell; width: 50%; padding-right: 8px;">
+    <div class="card" style="margin-bottom: 0;">
+      <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #94a3b8; text-transform: uppercase;">Authentication & Alignment</h4>
+      <div style="font-size: 12px; line-height: 1.8;">
+        <div>SPF Aligned: <strong style="color: #34d399;">{{spfAlignedRate}}%</strong></div>
+        <div>DKIM Aligned: <strong style="color: #34d399;">{{dkimAlignedRate}}%</strong></div>
+        <div>Fully Compliant: <strong style="color: #38bdf8;">{{fullyCompliantRate}}%</strong></div>
+      </div>
+    </div>
+  </div>
+  <div style="display: table-cell; width: 50%; padding-left: 8px;">
+    <div class="card" style="margin-bottom: 0;">
+      <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #94a3b8; text-transform: uppercase;">Policy Dispositions</h4>
+      <div style="font-size: 12px; line-height: 1.8;">
+        <div>None (Delivered): <strong style="color: #94a3b8;">{{dispositionNone}}</strong></div>
+        <div>Quarantine: <strong style="color: #fbbf24;">{{dispositionQuarantine}}</strong></div>
+        <div>Reject (Dropped): <strong style="color: #f87171;">{{dispositionReject}}</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{#hasTopSources}}
+<div style="margin-top: 24px;">
+  <h3 style="font-size: 14px; font-weight: 600; color: #f8fafc; margin-bottom: 8px;">
+    Top Sending Sources & IP Infrastructure
+  </h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Source IP / Host</th>
+        <th>Organization / Country</th>
+        <th>Messages</th>
+        <th>Pass %</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#topSources}}
+      <tr>
+        <td><code>{{ip}}</code></td>
+        <td>{{org}} ({{country}})</td>
+        <td><strong>{{count}}</strong></td>
+        <td><span style="color: {{passColor}};">{{passRate}}%</span></td>
+      </tr>
+      {{/topSources}}
+    </tbody>
+  </table>
+</div>
+{{/hasTopSources}}
+
+{{#hasTrend}}
+<div class="card" style="margin-top: 20px; font-size: 13px;">
+  <strong style="color: #f8fafc;">Period Trend vs Previous Window:</strong>
+  <div style="margin-top: 6px; color: #cbd5e1;">
+    Volume changed by <strong style="color: {{trendColor}};">{{volumeTrendPercent}}%</strong> ({{trendDirection}}), 
+    while pass rate changed by <strong style="color: {{passTrendColor}};">{{passTrendPercent}}%</strong>.
+  </div>
+</div>
+{{/hasTrend}}
+
+{{#hasAttachments}}
+<div style="margin-top: 18px; padding: 12px; background-color: rgba(56, 189, 248, 0.08); border: 1px dashed rgba(56, 189, 248, 0.3); border-radius: 8px; font-size: 12px; color: #94a3b8;">
+  📎 <strong>Attachments Included:</strong> {{attachmentNames}}
+</div>
+{{/hasAttachments}}
+
+<div style="text-align: center; margin-top: 28px;">
+  <a href="{{dashboardUrl}}" class="btn">Open Interactive Dashboard &rarr;</a>
+  {{#grafanaUrl}}
+  <a href="{{grafanaUrl}}" class="btn" style="background: #334155; margin-left: 8px;">View in Grafana</a>
+  {{/grafanaUrl}}
+</div>

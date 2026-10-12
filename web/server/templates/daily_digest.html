@@ -1,0 +1,47 @@
+<div style="margin-bottom: 24px;">
+  <div style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">
+    📬 Daily Incident Digest
+  </div>
+  <h2 style="font-size: 22px; font-weight: 700; color: #f8fafc; margin: 12px 0 4px 0;">
+    DMARC Security Summary for {{userEmail}}
+  </h2>
+  <div style="font-size: 13px; color: #94a3b8;">
+    Total Incidents Captured in Last 24 Hours: <strong style="color: #f8fafc;">{{incidentCount}}</strong>
+  </div>
+</div>
+
+<div class="card">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Severity</th>
+        <th>Alert Rule</th>
+        <th>Condition</th>
+        <th>Observed Value</th>
+        <th>Time</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#incidents}}
+      <tr>
+        <td>
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+            {{#isCritical}}background: rgba(239, 68, 68, 0.2); color: #f87171;{{/isCritical}}
+            {{#isWarning}}background: rgba(245, 158, 11, 0.2); color: #fbbf24;{{/isWarning}}
+            {{#isInfo}}background: rgba(56, 189, 248, 0.2); color: #38bdf8;{{/isInfo}}">
+            {{severity}}
+          </span>
+        </td>
+        <td><strong>{{ruleName}}</strong></td>
+        <td>{{conditionLabel}}</td>
+        <td><strong style="color: #f87171;">{{currentValueFormatted}}</strong> (thresh: {{thresholdFormatted}})</td>
+        <td style="color: #94a3b8;">{{timeFormatted}}</td>
+      </tr>
+      {{/incidents}}
+    </tbody>
+  </table>
+</div>
+
+<div style="text-align: center; margin-top: 28px;">
+  <a href="{{dashboardUrl}}" class="btn">Access Full Incident Telemetry &rarr;</a>
+</div>

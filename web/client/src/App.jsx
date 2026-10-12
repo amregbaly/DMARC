@@ -11,6 +11,8 @@ import RawLogExplorer from './components/RawLogExplorer';
 import DomainHealth from './components/DomainHealth';
 import UserManagement from './components/UserManagement';
 import ReportsDashboard from './components/ReportsDashboard';
+import AlertsDashboard from './components/AlertsDashboard';
+import EmailSettings from './components/EmailSettings';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import UserProfileModal from './components/UserProfileModal';
@@ -117,13 +119,13 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
 
   // Fetch metrics whenever selectedDomain changes
   useEffect(() => {
-    if (currentUser && activeTab !== 'users') {
+    if (currentUser && !['users', 'smtp', 'alerts'].includes(activeTab)) {
       loadDashboardData();
     }
   }, [selectedDomain, currentUser]);
 
   async function loadDashboardData() {
-    if (!currentUser || activeTab === 'users') return;
+    if (!currentUser || ['users', 'smtp', 'alerts'].includes(activeTab)) return;
     setLoading(true);
     setError(null);
     try {
@@ -231,6 +233,15 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
             selectedDomain={selectedDomain}
             onSelectDomain={setSelectedDomain}
             domains={domains}
+            currentUser={currentUser}
+          />
+        ) : activeTab === 'alerts' ? (
+          <AlertsDashboard
+            currentUser={currentUser}
+            domains={domains}
+          />
+        ) : activeTab === 'smtp' ? (
+          <EmailSettings
             currentUser={currentUser}
           />
         ) : activeTab === 'reports' ? (

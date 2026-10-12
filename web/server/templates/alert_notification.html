@@ -1,0 +1,76 @@
+<div style="margin-bottom: 24px;">
+  <div style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    {{#isCritical}}background-color: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);{{/isCritical}}
+    {{#isWarning}}background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);{{/isWarning}}
+    {{#isInfo}}background-color: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);{{/isInfo}}
+    {{#isRecovery}}background-color: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);{{/isRecovery}}">
+    {{#isRecovery}}✅ RECOVERED: Normal State Restored{{/isRecovery}}
+    {{^isRecovery}}🚨 {{severityUpper}} ALERT: Rule Triggered{{/isRecovery}}
+  </div>
+  
+  <h2 style="font-size: 20px; font-weight: 700; color: #f8fafc; margin: 12px 0 6px 0;">
+    {{ruleName}}
+  </h2>
+  <div style="font-size: 13px; color: #94a3b8;">
+    Domain Scope: <strong style="color: #38bdf8;">{{domainScope}}</strong> &bull; Evaluation Window: <strong>Last {{timeWindow}} min</strong>
+  </div>
+</div>
+
+<div class="card" style="{{#isCritical}}border-color: rgba(239, 68, 68, 0.4);{{/isCritical}}{{#isRecovery}}border-color: rgba(16, 185, 129, 0.4);{{/isRecovery}}">
+  <div style="font-size: 13px; color: #cbd5e1; margin-bottom: 12px;">
+    {{triggerMessage}}
+  </div>
+
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <tr>
+      <td style="padding: 6px 0; color: #94a3b8; width: 40%;">Condition Type:</td>
+      <td style="padding: 6px 0; color: #f8fafc; font-weight: 600;">{{conditionLabel}}</td>
+    </tr>
+    <tr>
+      <td style="padding: 6px 0; color: #94a3b8;">Trigger Threshold:</td>
+      <td style="padding: 6px 0; color: #f8fafc; font-weight: 600;">{{thresholdFormatted}}</td>
+    </tr>
+    <tr>
+      <td style="padding: 6px 0; color: #94a3b8;">Observed Value:</td>
+      <td style="padding: 6px 0; color: {{#isRecovery}}#34d399{{/isRecovery}}{{^isRecovery}}#f87171{{/isRecovery}}; font-weight: 700; font-size: 15px;">
+        {{currentValueFormatted}}
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 6px 0; color: #94a3b8;">Triggered At:</td>
+      <td style="padding: 6px 0; color: #e2e8f0;">{{triggeredAtFormatted}}</td>
+    </tr>
+  </table>
+</div>
+
+{{#hasOffenders}}
+<div style="margin-top: 24px;">
+  <h3 style="font-size: 14px; font-weight: 600; color: #f8fafc; margin-bottom: 8px;">
+    Offending Senders / Sources Detected (Top {{offendersCount}})
+  </h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Source IP / Host</th>
+        <th>Country / ASN</th>
+        <th>Volume</th>
+        <th>Disposition</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#offenders}}
+      <tr>
+        <td><code>{{ip}}</code></td>
+        <td>{{country}} ({{asn}})</td>
+        <td><strong>{{count}}</strong></td>
+        <td><span style="color: #f87171;">{{disposition}}</span></td>
+      </tr>
+      {{/offenders}}
+    </tbody>
+  </table>
+</div>
+{{/hasOffenders}}
+
+<div style="text-align: center; margin-top: 28px;">
+  <a href="{{dashboardUrl}}" class="btn">View Live Forensics in Dashboard &rarr;</a>
+</div>

@@ -21,7 +21,9 @@ import {
   Sun,
   Moon,
   Palette,
-  Compass
+  Compass,
+  BellRing,
+  Mail
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -52,10 +54,12 @@ export default function TopBar({
     health: { label: t('nav.health', 'Domain Health'), icon: HeartPulse },
     alignment: { label: t('nav.alignment', 'Auth & Alignment'), icon: CheckCircle2 },
     threats: { label: t('nav.threats', 'Threat Intel & SOC'), icon: ShieldAlert },
+    alerts: { label: t('nav.alerts', 'Alert Rules & Incidents'), icon: BellRing },
     policies: { label: t('nav.policies', 'Policies & Readiness'), icon: Sliders },
     reports: { label: t('nav.reports', 'Reports'), icon: FileText },
     records: { label: t('nav.records', 'Log Explorer'), icon: Search },
-    users: { label: t('nav.users', 'User Access'), icon: Users }
+    users: { label: t('nav.users', 'User Access'), icon: Users },
+    smtp: { label: t('nav.smtp', 'Email / SMTP Settings'), icon: Mail }
   };
 
   const currentTab = tabMeta[activeTab] || { label: activeTab, icon: Shield };

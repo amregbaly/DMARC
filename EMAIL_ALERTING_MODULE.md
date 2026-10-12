@@ -1,0 +1,111 @@
+# DMARC Sentinel Email Notification & Alerting Module
+
+## Overview
+
+The Email Notification & Alerting module provides enterprise-grade, asynchronous email dispatch, user-defined alerting rules across 7 security conditions, scheduled & on-demand PDF/CSV/XLSX intelligence reports, and runtime encrypted SMTP gateway configuration with live socket diagnostics.
+
+---
+
+## 🏗️ Architecture & Component Hierarchy
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                          DMARC SENTINEL                                │
+├──────────────────────────────────┬─────────────────────────────────────┤
+│         FRONTEND (React)         │           BACKEND (Node.js)         │
+├──────────────────────────────────┼─────────────────────────────────────┤
+│ • EmailSettings.jsx              │ • server.js (REST API & RBAC)       │
+│   - SMTP config with presets     │ • services/crypto.js (AES-256-GCM)  │
+│   - Masked password security     │ • services/emailService.js (Mailer) │
+│   - Diagnostic live test modal   │ • workers/emailQueueWorker.js       │
+│   - Delivery logs & Queue manager│ • workers/alertEvaluator.js         │
+│ • AlertsDashboard.jsx            │ • workers/reportScheduler.js        │
+│   - 7 security conditions        │ • db.js (SQLite transactional DB)   │
+│   - Cooldown & Digest toggles    │ • templates/*.html (Responsive)     │
+│   - Dry-run simulation engine    │                                     │
+│ • ReportsDashboard.jsx           │                                     │
+│   - On-demand email dispatch     │                                     │
+│   - Timezone-aware scheduling    │                                     │
+└──────────────────────────────────┴─────────────────────────────────────┘
+```
+
+---
+
+## 🛡️ Key Features
+
+### 1. Admin Outgoing SMTP Settings (`/admin/smtp`)
+- **Zero Hardcoding**: Settings are stored in the database at rest, never in `.env` only.
+- **AES-256-GCM Encryption**: Password and sensitive secrets are encrypted with authenticated encryption using unique random IVs and authenticated tags.
+- **API Masking**: Passwords are masked as `••••••••` in all API responses.
+- **Audit Logging**: Any modification to SMTP credentials records an audit trail with actor ID, IP, and timestamp without exposing secrets.
+- **Live Socket Test**: Modal runs a 3-step diagnostic test (DNS lookup, TCP handshake, TLS/Auth verification) with friendly error codes (`ECONNREFUSED`, `ETIMEDOUT`, `EAUTH`).
+- **One-Click Presets**: Pre-configured templates for **Mailpit (Local Dev)**, **Google Workspace / Gmail**, and **Microsoft 365 / Exchange Online**.
+
+### 2. User Alert Rules & Detection Engine (`/alerts`)
+- **7 Automated Conditions**:
+  1. `failure_rate`: DMARC pass rate drop below threshold (%)
+  2. `new_sender_ip`: Previously unseen sending IP detected (compared against 30-day baseline)
+  3. `quarantine_reject_volume`: Surge in messages blocked by DMARC policy
+  4. `alignment_failures`: Unaligned SPF or DKIM message count
+  5. `report_volume_drop`: Missing aggregate reports (% drop compared to previous interval)
+  6. `volume_spike`: Sudden anomalous volume surge (% traffic increase)
+  7. `disallowed_country_asn`: Traffic originating from unauthorized countries or ASNs
+- **Dry-Run Simulation**: "Test Rule" button queries historical OpenSearch data over the rule's time window, previews offending IPs and forensics, and tells the user if it would trigger without notifying recipients.
+- **Cooldown & State Management**: Configurable cooldown (e.g. 60m) prevents alert fatigue.
+- **Recovery Notifications**: Automatically detects when metric returns to normal and dispatches an "All Clear / Restored" recovery notice.
+- **Daily Digest Staging**: Option to route alerts into a consolidated daily security digest email.
+
+### 3. Asynchronous Queue Worker & Reliability
+- **Transactional Queue**: Enqueued messages are stored in SQLite `email_queue`.
+- **Atomic Job Claims**: Workers claim pending jobs with atomic transactions to prevent double-sends in cluster mode.
+- **Exponential Backoff**: Failed deliveries retry at 2 minutes, then 10 minutes, failing permanently after 3 attempts with logged error diagnostics.
+- **Deduplication**: 15-minute sliding window deduplication key prevents rapid redundant alerts.
+- **Rate Limiting**: Recipient rate limiting caps delivery at 20 emails/hour per address to avoid spam listing.
+- **Queue Inspector & Manual Retry**: Admins can view pending/failed queue jobs and trigger a manual retry with one click.
+
+### 4. Scheduled & On-Demand Executive Reports
+- **On-Demand Dispatch**: Click "Email This Report" on any generated report in Reports Dashboard to immediately email it with selected attachments.
+- **Automated Scheduling**: Cron worker checks schedules every minute, respecting `time_of_day` (e.g. 08:00) and user's chosen `timezone` (e.g. `America/New_York`, `UTC`).
+- **Multi-Format Support**: Attach PDF, CSV, or Excel XLSX files generated by `report_service.py`.
+- **One-Click Unsubscribe**: Includes HMAC-SHA256 signed unsubscribe URLs with a dedicated confirmation landing page.
+
+---
+
+## 🚀 Local Development with Mailpit
+
+Mailpit is an ultra-fast, zero-dependency SMTP server and Web UI for local email inspection.
+
+### 1. Start Mailpit via Docker Compose
+```bash
+docker compose up -d mailpit
+```
+- **SMTP Server**: `localhost:1025`
+- **Web UI & API**: `http://localhost:8025`
+
+### 2. Configure in Admin Panel
+1. Log in to DMARC Sentinel with an admin account.
+2. Navigate to **Email / SMTP Settings** in the left sidebar.
+3. Click the **Mailpit (Local Dev)** preset button.
+4. Host will populate with `127.0.0.1` (or `mailpit`), port `1025`, and Encryption `None`.
+5. Click **Save Settings**.
+6. Click **Send Test Email**, input your email address, and click **Run Test**.
+7. Open `http://localhost:8025` to inspect the received responsive HTML email!
+
+---
+
+## 🧪 Automated Test Suite
+
+A complete automated unit and integration test suite is located at `web/server/test-suite.js`.
+
+### Run the test suite:
+```bash
+node web/server/test-suite.js
+```
+
+### Coverage:
+- **AES-256-GCM Cryptography**: Encryption roundtrip, tamper detection, auth tag verification, secret masking.
+- **Security & Headers**: CRLF header injection rejection, RFC 5322 validation, HMAC signed unsubscribe tokens.
+- **Template Rendering**: 5 responsive HTML templates with inline styles and plaintext fallbacks.
+- **Database & RBAC**: Settings persistence, password masking in API queries, audit log sanitization, alert rule CRUD.
+- **Alert Evaluator Engine**: All 7 condition algorithms tested against simulated OpenSearch datasets.
+- **Live SMTP Delivery**: In-process ephemeral RFC SMTP socket server validates Nodemailer transport, queue claiming, and delivery logs.

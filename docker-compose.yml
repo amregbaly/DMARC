@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  dmarc-reporting:
+    build:
+      context: ./reporting
+      dockerfile: Dockerfile
+    container_name: dmarc-reporting-service
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
+    environment:
+      - OPENSEARCH_URL=${OPENSEARCH_URL:-https://opensearch:9200}
+      - OPENSEARCH_USER=${OPENSEARCH_USER:-admin}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD:-Asdard11@@}
+      - INDEX_PATTERN=${INDEX_PATTERN:-dmarc_aggregate-*}
+      - OPENSEARCH_ALLOW_SELF_SIGNED=true
+      - PORT=5050
+    volumes:
+      - ./reporting/templates:/app/templates
+      - ./reporting/output:/app/output
+    networks:
+      - dmarc-net
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: dmarc-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # Inbound SMTP
+      - "8025:8025" # Web UI and HTTP JSON API
+    environment:
+      - MP_MAX_MESSAGES=5000
+      - MP_DATABASE=/data/mailpit.db
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    volumes:
+      - mailpit-data:/data
+    networks:
+      - dmarc-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8025/api/v1/info || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mailpit-data:
+
+networks:
+  dmarc-net:
+    driver: bridge
