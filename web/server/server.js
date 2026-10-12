@@ -53,7 +53,9 @@ const opensearchDispatcher = new Agent({
 });
 
 // Security Middlewares: Helmet headers & restricted CORS
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false
+}));
 
 const defaultAllowedOrigins = [
   'http://localhost:3000',
@@ -2908,6 +2910,16 @@ app.get('/api/reports/dashboards-export', authenticateToken, async (req, res) =>
     res.status(500).json({ error: 'Failed to download dashboards export.' });
   }
 });
+
+// Serve static frontend bundle if built
+const clientDistPath = path.resolve(__dirname, '../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // Centralized unhandled error & CORS error handler
 app.use((err, req, res, next) => {
