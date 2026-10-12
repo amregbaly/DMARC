@@ -22,6 +22,15 @@ const REPORTS_OUTPUT_DIR = path.resolve(__dirname, '../../reporting/output');
 const TEMPLATES_DIR = path.resolve(__dirname, '../../reporting/templates');
 const DASHBOARDS_EXPORT_PATH = path.resolve(__dirname, '../../opensearch/dashboards-export.ndjson');
 
+function getPythonBinary() {
+  if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
+  const venvPython3 = path.resolve(__dirname, '../../reporting/venv/bin/python3');
+  if (fs.existsSync(venvPython3)) return venvPython3;
+  const venvPython = path.resolve(__dirname, '../../reporting/venv/bin/python');
+  if (fs.existsSync(venvPython)) return venvPython;
+  return 'python3';
+}
+
 // Initialize SQLite Database and seed default admin if necessary
 db.initDb();
 
@@ -2694,7 +2703,7 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
       args.push('--allowed-domains', req.user.domains.join(','));
     }
 
-    execFile('python3', args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {
+    execFile(getPythonBinary(), args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {
       if (error) {
         console.error('Report generation error:', error, stderr);
         return res.status(500).json({ error: 'Report generation execution failed.' });
@@ -2842,7 +2851,7 @@ app.post('/api/reports/schedules/:id/run', authenticateToken, requireRole('admin
       args.push('--allowed-domains', req.user.domains.join(','));
     }
 
-    execFile('python3', args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {
+    execFile(getPythonBinary(), args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {
       if (error) {
         console.error('Schedule report run error:', error, stderr);
         return res.status(500).json({ error: 'Failed to execute scheduled report generation.' });
