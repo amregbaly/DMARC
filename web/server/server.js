@@ -12,7 +12,8 @@ import dns from 'node:dns/promises';
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import ipaddr from 'ipaddr.js';
-import { fetch as opensearchFetch, Agent } from 'undici';
+import https from 'node:https';
+import http from 'node:http';
 import db from './db.js';
 import { generateToken, authenticateToken, requireRole, enforceDomainAccess } from './auth.js';
 
@@ -50,16 +51,58 @@ const basicAuth = Buffer.from(`${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}`).toStr
 
 // Scoped TLS Agent specifically for OpenSearch self-signed/internal CA certificates
 const allowSelfSigned = process.env.OPENSEARCH_ALLOW_SELF_SIGNED === 'true' || process.env.NODE_ENV !== 'production';
-const opensearchDispatcher = new Agent({
-  connect: {
-    ca: process.env.OPENSEARCH_CA_CERT && fs.existsSync(process.env.OPENSEARCH_CA_CERT)
-      ? fs.readFileSync(process.env.OPENSEARCH_CA_CERT)
-      : undefined,
-    rejectUnauthorized: process.env.OPENSEARCH_REJECT_UNAUTHORIZED === 'true'
-      ? true
-      : !allowSelfSigned
-  }
-});
+const isHttps = (OPENSEARCH_URL || '').startsWith('https:');
+const httpModule = isHttps ? https : http;
+const opensearchAgent = isHttps ? new https.Agent({
+  ca: process.env.OPENSEARCH_CA_CERT && fs.existsSync(process.env.OPENSEARCH_CA_CERT)
+    ? fs.readFileSync(process.env.OPENSEARCH_CA_CERT)
+    : undefined,
+  rejectUnauthorized: process.env.OPENSEARCH_REJECT_UNAUTHORIZED === 'true'
+    ? true
+    : !allowSelfSigned
+}) : undefined;
+
+function requestOpenSearch(urlStr, options = {}) {
+  return new Promise((resolve, reject) => {
+    try {
+      const url = new URL(urlStr);
+      const req = httpModule.request(url, {
+        method: options.method || 'GET',
+        headers: {
+          'Authorization': `Basic ${basicAuth}`,
+          ...(options.headers || {})
+        },
+        agent: opensearchAgent,
+        timeout: 30000
+      }, (res) => {
+        let data = '';
+        res.setEncoding('utf8');
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            console.error(`[OpenSearch Error] status=${res.statusCode}:`, data);
+            return reject(new Error(`OpenSearch service returned error [${res.statusCode}]`));
+          }
+          try {
+            resolve(JSON.parse(data));
+          } catch (e) {
+            resolve(data);
+          }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy(new Error('OpenSearch request timed out after 30s'));
+      });
+      if (options.body) {
+        req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+      }
+      req.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
 
 // Security Middlewares: Helmet headers & restricted CORS
 app.use(helmet({
@@ -124,23 +167,11 @@ app.use('/api/domain-health', domainHealthLimiter);
 // Helper to query OpenSearch
 async function queryOpenSearch(endpoint, body) {
   const url = `${OPENSEARCH_URL}/${INDEX}/${endpoint}`;
-  const response = await opensearchFetch(url, {
+  return requestOpenSearch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Basic ${basicAuth}`
-    },
-    body: JSON.stringify(body),
-    dispatcher: opensearchDispatcher
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[OpenSearch Error] status=${response.status}:`, errorText);
-    throw new Error(`OpenSearch service returned error [${response.status}]`);
-  }
-
-  return response.json();
 }
 
 function sanitizeStringParam(param) {
@@ -189,11 +220,7 @@ function buildFilterQuery(queryParams = {}, allowedDomains = null) {
 // 1. Health check (public)
 app.get('/api/health', async (req, res) => {
   try {
-    const test = await opensearchFetch(`${OPENSEARCH_URL}/_cluster/health`, {
-      headers: { Authorization: `Basic ${basicAuth}` },
-      dispatcher: opensearchDispatcher
-    });
-    const health = await test.json();
+    const health = await requestOpenSearch(`${OPENSEARCH_URL}/_cluster/health`);
     res.json({ status: 'ok', cluster: health });
   } catch (err) {
     console.error('Health check failure:', err);
