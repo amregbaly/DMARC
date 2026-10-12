@@ -30,6 +30,7 @@ export function initDb() {
       organization_name TEXT,
       logo_url TEXT,
       language TEXT NOT NULL DEFAULT 'en',
+      theme TEXT NOT NULL DEFAULT 'dark',
       parent_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
@@ -88,6 +89,9 @@ export function initDb() {
     db.prepare("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'en'").run();
   } catch (e) {}
   try {
+    db.prepare("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark'").run();
+  } catch (e) {}
+  try {
     db.prepare('ALTER TABLE reports_schedules ADD COLUMN last_run_at TEXT').run();
   } catch (e) {}
 
@@ -104,8 +108,8 @@ export function initDb() {
     const initialUsername = (process.env.INITIAL_ADMIN_USERNAME || 'admin').trim();
 
     db.prepare(`
-      INSERT INTO users (id, username, email, password_hash, role, organization_name, logo_url, parent_id, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'DMARC Sentinel Corp', '', NULL, 1, ?, ?)
+      INSERT INTO users (id, username, email, password_hash, role, organization_name, logo_url, language, theme, parent_id, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'DMARC Sentinel Corp', '', 'en', 'dark', NULL, 1, ?, ?)
     `).run(adminId, initialUsername, initialEmail, passwordHash, 'admin', now, now);
 
     console.log(`[BOOTSTRAP] Initial admin created: ${initialEmail} (username: ${initialUsername})`);
@@ -158,7 +162,7 @@ export function getAllUsers(caller) {
   let stmt;
   if (caller.role === 'admin') {
     stmt = db.prepare(`
-      SELECT u.id, u.username, u.email, u.role, u.organization_name, u.logo_url, u.language, u.parent_id, u.is_active, u.created_at, u.updated_at,
+      SELECT u.id, u.username, u.email, u.role, u.organization_name, u.logo_url, u.language, u.theme, u.parent_id, u.is_active, u.created_at, u.updated_at,
              p.username as parent_username
       FROM users u
       LEFT JOIN users p ON u.parent_id = p.id
@@ -166,7 +170,7 @@ export function getAllUsers(caller) {
     `);
   } else if (caller.role === 'manager') {
     stmt = db.prepare(`
-      SELECT u.id, u.username, u.email, u.role, u.organization_name, u.logo_url, u.language, u.is_active, u.created_at, u.updated_at
+      SELECT u.id, u.username, u.email, u.role, u.organization_name, u.logo_url, u.language, u.theme, u.is_active, u.created_at, u.updated_at
       FROM users u
       WHERE u.parent_id = ?
       ORDER BY u.created_at DESC
@@ -184,12 +188,13 @@ export function getAllUsers(caller) {
     organization_name: u.organization_name || '',
     logo_url: u.logo_url || '',
     language: u.language || 'en',
+    theme: u.theme || 'dark',
     is_active: Boolean(u.is_active),
     domains: domainsStmt.all(u.id).map(r => r.domain)
   }));
 }
 
-export function createUser({ email, username, password, role, organization_name = '', logo_url = '', language = 'en', parentId = null, domains = [] }) {
+export function createUser({ email, username, password, role, organization_name = '', logo_url = '', language = 'en', theme = 'dark', parentId = null, domains = [] }) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const salt = bcrypt.genSaltSync(12);
@@ -202,10 +207,12 @@ export function createUser({ email, username, password, role, organization_name 
   const cleanOrg = (organization_name || '').trim();
   const cleanLogo = (logo_url || '').trim();
   const cleanLang = (language && ['en', 'es'].includes(language.toLowerCase())) ? language.toLowerCase() : 'en';
+  const allowedThemes = ['dark', 'light', 'nordic', 'emerald'];
+  const cleanTheme = (theme && allowedThemes.includes(theme.toLowerCase())) ? theme.toLowerCase() : 'dark';
 
   const insertUser = db.prepare(`
-    INSERT INTO users (id, username, email, password_hash, role, organization_name, logo_url, language, parent_id, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    INSERT INTO users (id, username, email, password_hash, role, organization_name, logo_url, language, theme, parent_id, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `);
 
   const insertDomain = db.prepare(`
@@ -213,7 +220,7 @@ export function createUser({ email, username, password, role, organization_name 
   `);
 
   const tx = db.transaction(() => {
-    insertUser.run(id, cleanUsername, cleanEmail, passwordHash, role, cleanOrg, cleanLogo, cleanLang, parentId, now, now);
+    insertUser.run(id, cleanUsername, cleanEmail, passwordHash, role, cleanOrg, cleanLogo, cleanLang, cleanTheme, parentId, now, now);
     if (Array.isArray(domains)) {
       for (const d of domains) {
         if (d && typeof d === 'string' && d.trim()) {
@@ -227,7 +234,7 @@ export function createUser({ email, username, password, role, organization_name 
   return getUserById(id);
 }
 
-export function updateUser(id, { email, username, password, role, organization_name, logo_url, language, isActive, domains }) {
+export function updateUser(id, { email, username, password, role, organization_name, logo_url, language, theme, isActive, domains }) {
   const existing = getUserById(id);
   if (!existing) return null;
 
@@ -245,13 +252,15 @@ export function updateUser(id, { email, username, password, role, organization_n
     const newOrg = organization_name !== undefined ? (organization_name ? organization_name.trim() : '') : existing.organization_name;
     const newLogo = logo_url !== undefined ? (logo_url ? logo_url.trim() : '') : existing.logo_url;
     const newLang = language !== undefined && ['en', 'es'].includes(language.toLowerCase()) ? language.toLowerCase() : (existing.language || 'en');
+    const allowedThemes = ['dark', 'light', 'nordic', 'emerald'];
+    const newTheme = theme !== undefined && allowedThemes.includes(theme.toLowerCase()) ? theme.toLowerCase() : (existing.theme || 'dark');
     const newIsActive = isActive !== undefined ? (isActive ? 1 : 0) : existing.is_active;
 
     db.prepare(`
       UPDATE users
-      SET username = ?, email = ?, password_hash = ?, role = ?, organization_name = ?, logo_url = ?, language = ?, is_active = ?, updated_at = ?
+      SET username = ?, email = ?, password_hash = ?, role = ?, organization_name = ?, logo_url = ?, language = ?, theme = ?, is_active = ?, updated_at = ?
       WHERE id = ?
-    `).run(newUsername, newEmail, passwordHash, newRole, newOrg, newLogo, newLang, newIsActive, now, id);
+    `).run(newUsername, newEmail, passwordHash, newRole, newOrg, newLogo, newLang, newTheme, newIsActive, now, id);
 
     if (Array.isArray(domains)) {
       db.prepare('DELETE FROM user_domains WHERE user_id = ?').run(id);
@@ -268,7 +277,7 @@ export function updateUser(id, { email, username, password, role, organization_n
   return getUserById(id);
 }
 
-export function updateUserProfile(id, { username, organization_name, logo_url, language }) {
+export function updateUserProfile(id, { username, organization_name, logo_url, language, theme }) {
   const existing = getUserById(id);
   if (!existing) return null;
 
@@ -277,12 +286,14 @@ export function updateUserProfile(id, { username, organization_name, logo_url, l
   const newOrg = organization_name !== undefined ? organization_name.trim() : (existing.organization_name || '');
   const newLogo = logo_url !== undefined ? logo_url.trim() : (existing.logo_url || '');
   const newLang = language !== undefined && ['en', 'es'].includes(language.toLowerCase()) ? language.toLowerCase() : (existing.language || 'en');
+  const allowedThemes = ['dark', 'light', 'nordic', 'emerald'];
+  const newTheme = theme !== undefined && allowedThemes.includes(theme.toLowerCase()) ? theme.toLowerCase() : (existing.theme || 'dark');
 
   db.prepare(`
     UPDATE users
-    SET username = ?, organization_name = ?, logo_url = ?, language = ?, updated_at = ?
+    SET username = ?, organization_name = ?, logo_url = ?, language = ?, theme = ?, updated_at = ?
     WHERE id = ?
-  `).run(newUsername, newOrg, newLogo, newLang, now, id);
+  `).run(newUsername, newOrg, newLogo, newLang, newTheme, now, id);
 
   return getUserById(id);
 }

@@ -17,9 +17,11 @@ import {
   User as UserIcon,
   ChevronDown,
   X,
-  Settings
+  Settings,
+  Palette
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useTheme } from '../theme/ThemeContext';
 
 export default function Sidebar({
   domains = [],
@@ -38,6 +40,7 @@ export default function Sidebar({
 }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { language, setLanguage, t } = useLanguage();
+  const { theme, setTheme, themes } = useTheme();
 
   const isAdmin = currentUser?.role === 'admin';
   const isManager = currentUser?.role === 'manager';
@@ -287,6 +290,30 @@ export default function Sidebar({
                       <UserIcon className="w-3.5 h-3.5 text-cyan-400" />
                       <span>{t('nav.profile', 'Profile & Preferences')}</span>
                     </button>
+
+                    {/* Quick Theme Switcher in Sidebar Menu */}
+                    <div className="px-3.5 py-2 flex items-center justify-between text-slate-300 border-t border-b border-slate-800/60 my-0.5 bg-slate-950/40">
+                      <span className="flex items-center gap-2 text-xs">
+                        <Palette className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{language === 'es' ? 'Tema' : 'Theme'}</span>
+                      </span>
+                      <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                        {themes.map((th) => (
+                          <button
+                            key={th.id}
+                            onClick={() => setTheme(th.id, true)}
+                            title={th.name}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                              theme === th.id
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {th.id === 'dark' ? '🌙' : th.id === 'nordic' ? '❄️' : th.id === 'emerald' ? '🌿' : '☀️'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
                     {/* User Management shortcut (if privileged) */}
                     {canManageUsers && (

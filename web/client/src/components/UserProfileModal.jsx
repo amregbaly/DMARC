@@ -13,15 +13,19 @@ import {
   Lock
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useTheme } from '../theme/ThemeContext';
 import { updateProfile } from '../services/api';
+import { Palette, Sun, Moon, Compass, Sparkles } from 'lucide-react';
 
 export default function UserProfileModal({ isOpen, onClose, currentUser, onUserUpdated, onChangePasswordClick }) {
   const { language, setLanguage, t } = useLanguage();
+  const { theme, setTheme, themes } = useTheme();
 
   const [username, setUsername] = useState(currentUser?.username || '');
   const [orgName, setOrgName] = useState(currentUser?.organization_name || '');
   const [logoUrl, setLogoUrl] = useState(currentUser?.logo_url || '');
   const [selectedLang, setSelectedLang] = useState(currentUser?.language || language || 'en');
+  const [selectedTheme, setSelectedTheme] = useState(currentUser?.theme || theme || 'dark');
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null); // { type: 'success' | 'error', message: string }
 
@@ -31,8 +35,9 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onUserU
       setOrgName(currentUser.organization_name || '');
       setLogoUrl(currentUser.logo_url || '');
       setSelectedLang(currentUser.language || language || 'en');
+      setSelectedTheme(currentUser.theme || theme || 'dark');
     }
-  }, [currentUser, language]);
+  }, [currentUser, language, theme]);
 
   if (!isOpen) return null;
 
@@ -46,14 +51,16 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onUserU
         username: username.trim(),
         organization_name: orgName.trim(),
         logo_url: logoUrl.trim(),
-        language: selectedLang
+        language: selectedLang,
+        theme: selectedTheme
       });
 
       if (res && res.user) {
         if (onUserUpdated) onUserUpdated(res.user);
       }
-      // Apply language immediately
+      // Apply theme and language permanently
       setLanguage(selectedLang, false);
+      setTheme(selectedTheme, false);
 
       setStatus({
         type: 'success',
@@ -204,6 +211,112 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onUserU
                   <div className="text-[10px] text-slate-400">España / Latinoamérica</div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-800/80 my-4" />
+
+          {/* Theme Selection Section */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <Palette className="w-4 h-4 text-cyan-400" />
+                {t('profileModal.themeLabel', 'Interface Theme & Color Scheme')}
+              </label>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                {selectedTheme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              {t('profileModal.themeHelp', 'Choose your visual experience. Light themes provide crisp, executive contrast for brightly lit environments.')}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {themes.map((th) => {
+                const isSelected = selectedTheme === th.id;
+                return (
+                  <div
+                    key={th.id}
+                    onClick={() => {
+                      setSelectedTheme(th.id);
+                      setTheme(th.id, false); // Instant live preview!
+                    }}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-cyan-500 shadow-lg shadow-cyan-500/15 bg-cyan-950/20 ring-1 ring-cyan-500/40'
+                        : 'border-slate-800 hover:border-slate-700 bg-slate-900/60 hover:bg-slate-900/90'
+                    }`}
+                  >
+                    {/* Header: Name, Badge, Active Checkmark */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {th.id === 'dark' ? (
+                          <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-cyan-400">
+                            <Moon className="w-3.5 h-3.5" />
+                          </div>
+                        ) : th.id === 'nordic' ? (
+                          <div className="p-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-600">
+                            <Compass className="w-3.5 h-3.5" />
+                          </div>
+                        ) : th.id === 'emerald' ? (
+                          <div className="p-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600">
+                            <Shield className="w-3.5 h-3.5" />
+                          </div>
+                        ) : (
+                          <div className="p-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-600">
+                            <Sun className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                            {t(`profileModal.themes.${th.id}.name`, th.name)}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {th.badge}
+                          </div>
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <div className="p-1 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-[10.5px] text-slate-400 mb-2.5 leading-snug">
+                      {t(`profileModal.themes.${th.id}.desc`, th.desc)}
+                    </p>
+
+                    {/* Palette visual preview bar */}
+                    <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                      <div
+                        className="w-5 h-5 rounded-lg border shadow-xs shrink-0 flex items-center justify-center text-[8px] font-bold"
+                        style={{ backgroundColor: th.preview.bg, borderColor: th.preview.border, color: th.preview.text }}
+                        title="Background"
+                      >
+                        Bg
+                      </div>
+                      <div
+                        className="w-5 h-5 rounded-lg border shadow-xs shrink-0 flex items-center justify-center text-[8px] font-bold"
+                        style={{ backgroundColor: th.preview.card, borderColor: th.preview.border, color: th.preview.text }}
+                        title="Card Surface"
+                      >
+                        UI
+                      </div>
+                      <div
+                        className="w-5 h-5 rounded-lg shadow-xs shrink-0"
+                        style={{ backgroundColor: th.preview.accent }}
+                        title="Accent Color"
+                      />
+                      <div className="flex-1 text-[9px] text-slate-400 truncate pl-1 font-mono">
+                        {th.preview.bg}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

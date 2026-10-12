@@ -15,6 +15,7 @@ import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import UserProfileModal from './components/UserProfileModal';
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
+import { ThemeProvider } from './theme/ThemeContext';
 import {
   fetchMe,
   clearToken,
@@ -27,6 +28,48 @@ import {
   fetchPolicies
 } from './services/api';
 import { AlertCircle, RefreshCw, Shield } from 'lucide-react';
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Dashboard error caught by boundary:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-slate-300">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl glass-panel">
+            <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">Display Error Encountered</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              An unexpected interface error occurred. Please click below to reload or reset your view.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false });
+                  window.location.reload();
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold cursor-pointer shadow-lg shadow-cyan-950/50"
+              >
+                Reload Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
   const { t } = useLanguage();
@@ -326,16 +369,20 @@ export default function App() {
   }
 
   return (
-    <LanguageProvider currentUser={currentUser} onUserUpdated={setCurrentUser}>
-      {!currentUser ? (
-        <Login onLoginSuccess={handleLoginSuccess} />
-      ) : (
-        <DashboardApp
-          currentUser={currentUser}
-          setCurrentUser={setCurrentUser}
-          onLogout={handleLogout}
-        />
-      )}
-    </LanguageProvider>
+    <ThemeProvider currentUser={currentUser} onUserUpdated={setCurrentUser}>
+      <LanguageProvider currentUser={currentUser} onUserUpdated={setCurrentUser}>
+        {!currentUser ? (
+          <Login onLoginSuccess={handleLoginSuccess} />
+        ) : (
+          <ErrorBoundary>
+            <DashboardApp
+              currentUser={currentUser}
+              setCurrentUser={setCurrentUser}
+              onLogout={handleLogout}
+            />
+          </ErrorBoundary>
+        )}
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }

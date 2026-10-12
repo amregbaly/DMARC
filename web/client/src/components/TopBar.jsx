@@ -17,9 +17,14 @@ import {
   LogOut,
   User as UserIcon,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Sun,
+  Moon,
+  Palette,
+  Compass
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useTheme } from '../theme/ThemeContext';
 
 export default function TopBar({
   domains = [],
@@ -36,6 +41,7 @@ export default function TopBar({
 }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { language, setLanguage, t } = useLanguage();
+  const { theme, setTheme, isDark, themes } = useTheme();
 
   const isAdmin = currentUser?.role === 'admin';
   const isManager = currentUser?.role === 'manager';
@@ -54,6 +60,12 @@ export default function TopBar({
 
   const currentTab = tabMeta[activeTab] || { label: activeTab, icon: Shield };
   const CurrentIcon = currentTab.icon;
+
+  function cycleTheme() {
+    const order = ['dark', 'light', 'nordic', 'emerald'];
+    const next = order[(order.indexOf(theme) + 1) % order.length];
+    setTheme(next, true);
+  }
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-slate-800/80 bg-slate-950/75 backdrop-blur-xl px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -87,7 +99,7 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* Right Controls: Filter, Language, Refresh, User */}
+      {/* Right Controls: Filter, Language, Theme, Refresh, User */}
       <div className="flex items-center gap-2 sm:gap-2.5">
         {/* Domain Filter Dropdown */}
         {activeTab !== 'users' && (
@@ -112,6 +124,27 @@ export default function TopBar({
             </select>
           </div>
         )}
+
+        {/* Quick Theme Toggle Pill */}
+        <button
+          id="theme-toggle-btn"
+          onClick={cycleTheme}
+          title={`Active theme: ${theme}. Click to switch theme.`}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 transition cursor-pointer font-medium"
+        >
+          {theme === 'dark' ? (
+            <Moon className="w-3.5 h-3.5 text-cyan-400" />
+          ) : theme === 'nordic' ? (
+            <Compass className="w-3.5 h-3.5 text-blue-500" />
+          ) : theme === 'emerald' ? (
+            <Shield className="w-3.5 h-3.5 text-emerald-500" />
+          ) : (
+            <Sun className="w-3.5 h-3.5 text-amber-500" />
+          )}
+          <span className="hidden sm:inline font-semibold text-[11px] capitalize">
+            {theme === 'dark' ? 'Dark' : theme === 'nordic' ? 'Nordic' : theme === 'emerald' ? 'Emerald' : 'Light'}
+          </span>
+        </button>
 
         {/* Quick Language Toggle Pill */}
         <button
@@ -230,7 +263,7 @@ export default function TopBar({
                   </button>
 
                   {/* Language Switcher in Dropdown */}
-                  <div className="px-3.5 py-2 flex items-center justify-between text-slate-300 border-t border-b border-slate-800/60 my-1 bg-slate-950/40">
+                  <div className="px-3.5 py-2 flex items-center justify-between text-slate-300 border-t border-slate-800/60 my-0.5 bg-slate-950/40">
                     <span className="flex items-center gap-2 text-xs">
                       <Globe className="w-3.5 h-3.5 text-cyan-400" />
                       <span>{t('nav.language', 'Language')}</span>
@@ -256,6 +289,30 @@ export default function TopBar({
                       >
                         🇪🇸 ES
                       </button>
+                    </div>
+                  </div>
+
+                  {/* Theme Switcher in Dropdown */}
+                  <div className="px-3.5 py-2 flex items-center justify-between text-slate-300 border-t border-b border-slate-800/60 my-0.5 bg-slate-950/40">
+                    <span className="flex items-center gap-2 text-xs">
+                      <Palette className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>{language === 'es' ? 'Tema' : 'Theme'}</span>
+                    </span>
+                    <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                      {themes.map((th) => (
+                        <button
+                          key={th.id}
+                          onClick={() => setTheme(th.id, true)}
+                          title={th.name}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                            theme === th.id
+                              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {th.id === 'dark' ? '🌙' : th.id === 'nordic' ? '❄️' : th.id === 'emerald' ? '🌿' : '☀️'}
+                        </button>
+                      ))}
                     </div>
                   </div>
 

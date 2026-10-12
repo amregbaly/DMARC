@@ -3,16 +3,26 @@
 :root {
   color-scheme: dark;
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --theme-transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 
 body {
   margin: 0;
-  background-color: #030712;
-  color: #f3f4f6;
+  background-color: var(--color-slate-950, #030712);
+  color: var(--color-slate-200, #f3f4f6);
   overflow-x: hidden;
+  transition: var(--theme-transition);
 }
 
-/* Custom modern scrollbars */
+/* ==========================================================================
+   THEME DEFINITIONS: CYBER DARK (DEFAULT)
+   ========================================================================== */
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Dark Mode Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -38,6 +48,7 @@ body {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: var(--theme-transition);
 }
 
 .glass-panel-hover {
@@ -68,4 +79,259 @@ body {
 
 .animate-pulse-live {
   animation: radar-pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* ==========================================================================
+   THEME DEFINITIONS: LIGHT COLOR PALETTES
+   ========================================================================== */
+
+/* 1. EXECUTIVE LIGHT (Pure White & Slate) */
+html[data-theme="light"],
+[data-theme="light"] {
+  color-scheme: light;
+  --color-slate-950: #f8fafc;
+  --color-slate-900: #ffffff;
+  --color-slate-850: #f1f5f9;
+  --color-slate-800: #e2e8f0;
+  --color-slate-700: #cbd5e1;
+  --color-slate-600: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-400: #475569;
+  --color-slate-300: #334155;
+  --color-slate-200: #1e293b;
+  --color-slate-100: #0f172a;
+}
+
+html[data-theme="light"] .glass-panel {
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+}
+
+html[data-theme="light"] .glass-panel-hover:hover {
+  border-color: rgba(2, 132, 199, 0.35);
+  box-shadow: 0 12px 32px -8px rgba(2, 132, 199, 0.12);
+}
+
+/* 2. NORDIC FROST (Cool Arctic Ice-Blue) */
+html[data-theme="nordic"],
+[data-theme="nordic"] {
+  color-scheme: light;
+  --color-slate-950: #f0f4f8;
+  --color-slate-900: #ffffff;
+  --color-slate-850: #e8f0f8;
+  --color-slate-800: #d0e0f0;
+  --color-slate-700: #b8d0e8;
+  --color-slate-600: #7890a8;
+  --color-slate-500: #507090;
+  --color-slate-400: #385878;
+  --color-slate-300: #204060;
+  --color-slate-200: #102848;
+  --color-slate-100: #081830;
+}
+
+html[data-theme="nordic"] .glass-panel {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(208, 224, 240, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(37, 99, 235, 0.06), 0 2px 6px -1px rgba(37, 99, 235, 0.03);
+}
+
+html[data-theme="nordic"] .glass-panel-hover:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 12px 32px -8px rgba(37, 99, 235, 0.12);
+}
+
+/* 3. EMERALD SENTINEL (Soft Sage & Forest Green) */
+html[data-theme="emerald"],
+[data-theme="emerald"] {
+  color-scheme: light;
+  --color-slate-950: #f2f7f4;
+  --color-slate-900: #ffffff;
+  --color-slate-850: #e8f2ec;
+  --color-slate-800: #d4e4da;
+  --color-slate-700: #b8d0c2;
+  --color-slate-600: #7a9886;
+  --color-slate-500: #527460;
+  --color-slate-400: #3a5c48;
+  --color-slate-300: #244432;
+  --color-slate-200: #143020;
+  --color-slate-100: #081c10;
+}
+
+html[data-theme="emerald"] .glass-panel {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 228, 218, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(16, 185, 129, 0.06), 0 2px 6px -1px rgba(16, 185, 129, 0.03);
+}
+
+html[data-theme="emerald"] .glass-panel-hover:hover {
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 12px 32px -8px rgba(16, 185, 129, 0.12);
+}
+
+/* ==========================================================================
+   GLOBAL LIGHT THEME OVERRIDES & CONTRAST REFINEMENTS
+   ========================================================================== */
+html:not([data-theme="dark"]) {
+  /* Scrollbars in light mode */
+  ::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Headings & Title Typography */
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--color-slate-100);
+  }
+
+  /* Text-white override for readable dark contrast in light mode */
+  .text-white:not([class*="bg-cyan-"]):not([class*="bg-blue-"]):not([class*="bg-purple-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-red-"]):not([class*="bg-amber-"]):not([class*="from-"]):not([class*="badge"]):not(button[class*="bg-"]):not(a[class*="bg-"]):not(.keep-white) {
+    color: var(--color-slate-100);
+  }
+
+  /* Retain bright white text on colored CTA buttons & gradient pills */
+  button[class*="bg-gradient-"],
+  button[class*="bg-blue-"],
+  button[class*="bg-rose-"],
+  button[class*="bg-emerald-"],
+  .keep-white {
+    color: #ffffff !important;
+  }
+
+  /* Form Controls */
+  input, select, textarea {
+    color: var(--color-slate-100) !important;
+    background-color: var(--color-slate-900) !important;
+    border-color: var(--color-slate-800) !important;
+  }
+  input::placeholder, textarea::placeholder {
+    color: #94a3b8 !important;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: #0284c7 !important;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
+  }
+
+  /* Table styling */
+  table thead th {
+    background-color: var(--color-slate-850) !important;
+    color: var(--color-slate-400) !important;
+    border-color: var(--color-slate-800) !important;
+  }
+  table tbody tr {
+    border-color: var(--color-slate-800) !important;
+  }
+  table tbody tr:hover {
+    background-color: var(--color-slate-850) !important;
+  }
+
+  /* TopBar & Sidebar Glass */
+  header {
+    background: rgba(255, 255, 255, 0.85) !important;
+    border-color: var(--color-slate-800) !important;
+  }
+  aside {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: var(--color-slate-800) !important;
+  }
+}
+
+/* ==========================================================================
+   LEAFLET MAP CUSTOM STYLING (DARK & LIGHT THEMES)
+   ========================================================================== */
+.leaflet-container {
+  background-color: #020617 !important;
+  font-family: inherit !important;
+}
+
+html:not([data-theme="dark"]) .leaflet-container {
+  background-color: #f1f5f9 !important;
+}
+
+.leaflet-pane {
+  z-index: 10 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 20 !important;
+}
+
+.dmarc-custom-popup .leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.95) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(16px) !important;
+  padding: 0 !important;
+}
+
+html:not([data-theme="dark"]) .dmarc-custom-popup .leaflet-popup-content-wrapper {
+  background: rgba(255, 255, 255, 0.98) !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12) !important;
+}
+
+.dmarc-custom-popup .leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.dmarc-custom-popup .leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+}
+
+html:not([data-theme="dark"]) .dmarc-custom-popup .leaflet-popup-tip {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+}
+
+.dmarc-custom-popup .leaflet-popup-close-button {
+  color: #94a3b8 !important;
+  padding: 6px 8px 0 0 !important;
+}
+
+.dmarc-custom-popup .leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+}
+
+html:not([data-theme="dark"]) .dmarc-custom-popup .leaflet-popup-close-button:hover {
+  color: #0f172a !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(2, 6, 23, 0.75) !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  backdrop-filter: blur(4px) !important;
+  border-radius: 6px 0 0 0 !important;
+  padding: 2px 6px !important;
+}
+
+html:not([data-theme="dark"]) .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.85) !important;
+  color: #64748b !important;
+}
+
+.leaflet-control-attribution a {
+  color: #38bdf8 !important;
+  text-decoration: none !important;
+}
+
+html:not([data-theme="dark"]) .leaflet-control-attribution a {
+  color: #0284c7 !important;
 }

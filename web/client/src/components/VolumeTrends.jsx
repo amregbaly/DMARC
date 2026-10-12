@@ -10,9 +10,11 @@ import {
 } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useTheme } from '../theme/ThemeContext';
 
 export default function VolumeTrends({ timeseries = [] }) {
   const { t, language } = useLanguage();
+  const { chartTokens } = useTheme();
   const isEs = language === 'es';
 
   if (!timeseries || timeseries.length === 0) {
@@ -91,19 +93,19 @@ export default function VolumeTrends({ timeseries = [] }) {
               </linearGradient>
             </defs>
 
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartTokens.grid} vertical={false} />
             <XAxis
               dataKey="date"
-              stroke="#64748b"
+              stroke={chartTokens.axis}
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: chartTokens.axisLine }}
             />
             <YAxis
-              stroke="#64748b"
+              stroke={chartTokens.axis}
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: chartTokens.axisLine }}
               tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)}
             />
             <Tooltip content={<CustomTooltip />} />

@@ -234,6 +234,7 @@ app.post('/api/auth/login', async (req, res) => {
         organization_name: user.organization_name || '',
         logo_url: user.logo_url || '',
         language: user.language || 'en',
+        theme: user.theme || 'dark',
         domains: user.domains || []
       }
     });
@@ -243,15 +244,16 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Update current user's profile / identity & language
+// Update current user's profile / identity & language & theme
 app.put('/api/auth/profile', authenticateToken, async (req, res) => {
   try {
-    const { username, organization_name, logo_url, language } = req.body;
+    const { username, organization_name, logo_url, language, theme } = req.body;
     const updated = db.updateUserProfile(req.user.id, {
       username,
       organization_name,
       logo_url,
-      language
+      language,
+      theme
     });
     if (!updated) {
       return res.status(404).json({ error: 'User account not found' });
@@ -266,6 +268,7 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
         organization_name: updated.organization_name || '',
         logo_url: updated.logo_url || '',
         language: updated.language || 'en',
+        theme: updated.theme || 'dark',
         domains: updated.domains || []
       }
     });
@@ -427,6 +430,7 @@ app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async
       organization_name,
       logo_url,
       language: language || 'en',
+      theme: req.body.theme || 'dark',
       parentId,
       domains: finalDomains
     });
@@ -439,6 +443,7 @@ app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async
       organization_name: newUser.organization_name || '',
       logo_url: newUser.logo_url || '',
       language: newUser.language || 'en',
+      theme: newUser.theme || 'dark',
       parent_id: req.user.role === 'admin' ? newUser.parent_id : undefined,
       is_active: newUser.is_active,
       created_at: newUser.created_at,
@@ -503,6 +508,7 @@ app.put('/api/users/:id', authenticateToken, requireRole('admin', 'manager'), as
       organization_name,
       logo_url,
       language,
+      theme: req.body.theme,
       isActive,
       domains
     });
@@ -515,6 +521,7 @@ app.put('/api/users/:id', authenticateToken, requireRole('admin', 'manager'), as
       organization_name: updated.organization_name || '',
       logo_url: updated.logo_url || '',
       language: updated.language || 'en',
+      theme: updated.theme || 'dark',
       parent_id: req.user.role === 'admin' ? updated.parent_id : undefined,
       is_active: updated.is_active,
       updated_at: updated.updated_at,

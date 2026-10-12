@@ -44,6 +44,26 @@ export const translations = {
       logoHelp: 'E.g. templates/assets/sentinel_logo.png or http://...',
       languageLabel: 'System Language',
       languageHelp: 'Select your preferred language for the console interface and generated reports.',
+      themeLabel: 'Interface Theme & Color Scheme',
+      themeHelp: 'Choose your visual experience. Light themes provide crisp, executive contrast for brightly lit environments.',
+      themes: {
+        dark: {
+          name: 'Cyber Dark',
+          desc: 'Sentinel SOC classic midnight & cyan'
+        },
+        light: {
+          name: 'Executive Light',
+          desc: 'Crisp corporate slate & clean white'
+        },
+        nordic: {
+          name: 'Nordic Frost',
+          desc: 'Cool ice-blue with arctic azure accents'
+        },
+        emerald: {
+          name: 'Emerald Sentinel',
+          desc: 'High-trust sage & forest green security'
+        }
+      },
       saveBtn: 'Save Profile & Preferences',
       savingBtn: 'Saving Preferences...',
       successMsg: 'Profile and preferences successfully saved!',
@@ -362,6 +382,13 @@ export const translations = {
       colIpAddress: 'IP Address',
       colPtrHostname: 'PTR Hostname',
       noGeoPoints: 'No geolocation points available.',
+      layerDark: 'Carto Dark',
+      layerLight: 'Carto Light',
+      layerSatellite: 'Satellite',
+      resetView: 'Reset View',
+      top10Countries: 'Top 10 Countries',
+      forwarded: 'DMARC Forwarded',
+      recordsNotFound: 'Records not found',
 
       // Per Country (View 8)
       searchCountryPlaceholder: 'Search origin country or code...',
@@ -561,6 +588,26 @@ export const translations = {
       logoHelp: 'Ej. templates/assets/sentinel_logo.png o http://...',
       languageLabel: 'Idioma del Sistema',
       languageHelp: 'Seleccione su idioma preferido para la consola y los informes generados.',
+      themeLabel: 'Tema de Interfaz y Paleta de Colores',
+      themeHelp: 'Seleccione su preferencia visual. Los temas claros ofrecen un contraste ejecutivo óptimo en entornos con luz natural.',
+      themes: {
+        dark: {
+          name: 'Cyber Dark',
+          desc: 'Clásico SOC nocturno con acentos cian'
+        },
+        light: {
+          name: 'Executive Light',
+          desc: 'Corporativo impecable en blanco y pizarra'
+        },
+        nordic: {
+          name: 'Nordic Frost',
+          desc: 'Azul polar con reflejos árticos y hielo'
+        },
+        emerald: {
+          name: 'Emerald Sentinel',
+          desc: 'Seguridad y confianza en salvia y bosque'
+        }
+      },
       saveBtn: 'Guardar Perfil y Preferencias',
       savingBtn: 'Guardando Preferencias...',
       successMsg: '¡Perfil y preferencias guardados exitosamente!',
@@ -879,6 +926,13 @@ export const translations = {
       colIpAddress: 'Dirección IP',
       colPtrHostname: 'Nombre de Host PTR',
       noGeoPoints: 'No hay puntos de geolocalización disponibles.',
+      layerDark: 'Carto Oscuro',
+      layerLight: 'Carto Claro',
+      layerSatellite: 'Satélite',
+      resetView: 'Restablecer',
+      top10Countries: '10 Principales Países',
+      forwarded: 'DMARC Reenviado',
+      recordsNotFound: 'Sin registros encontrados',
 
       // Per Country (View 8)
       searchCountryPlaceholder: 'Buscar país o código de origen...',
