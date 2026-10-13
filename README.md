@@ -1,267 +1,154 @@
-# DMARC Aggregate Analysis Dashboard for Grafana + OpenSearch
+# DMARC Sentinel: Enterprise Email Authentication, Threat Intelligence & Reporting Platform
 
-A fully provisioned Grafana dashboard and supporting OpenSearch assets for analyzing DMARC aggregate reports from [parsedmarc](https://domainaware.github.io/parsedmarc/) or compatible tools.
+[![Node.js](https://img.shields.io/badge/Node.js-20%20%7C%2022-brightgreen.svg)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
+[![OpenSearch](https://img.shields.io/badge/OpenSearch-2.x%20%7C%203.x-005BBB.svg)](https://opensearch.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+**DMARC Sentinel** is an enterprise-grade cybersecurity platform for monitoring, analyzing, forensics, and reporting on DMARC aggregate reports (`rua`). It transforms raw XML aggregate reports from major email receivers (Google, Microsoft 365, Yahoo, etc.) into executive dashboards, 4-way alignment matrices, live SOC threat feeds, high-definition GIS maps, automated multi-format PDF/Excel reports, and proactive security alerts.
+
+---
+
+## 📚 Documentation Index
+
+For complete and detailed technical documentation, please consult the dedicated guides in the [`docs/`](docs/) directory:
+
+| Document | Description |
+| :--- | :--- |
+| **[📑 Features Catalog](docs/FEATURES_LIST.md)** | Exhaustive, itemized breakdown of all features across all 14 platform modules. |
+| **[🏗️ System Architecture](docs/ARCHITECTURE.md)** | End-to-end topology, data flows, database schema, entity relationships, and security model. |
+| **[🔌 REST API Reference](docs/API_REFERENCE.md)** | Complete developer guide with endpoints, payloads, query parameters, and auth contracts. |
+| **[🚀 Deployment & Operations Guide](docs/DEPLOYMENT_GUIDE.md)** | Production setup on Linux with systemd, Nginx reverse proxy, SSL/TLS, and maintenance procedures. |
+| **[🛡️ Security Audit](SECURITY_AUDIT.md)** | Comprehensive penetration testing report, vulnerability assessments, and mitigations. |
+| **[🩺 Domain Health Spec](DOMAIN_HEALTH_SPEC.md)** | Deep-dive specification for the live DNS protocol analyzer (PowerDMARC parity). |
+| **[✉️ Email Alerting Module](EMAIL_ALERTING_MODULE.md)** | Technical specification for the asynchronous SMTP queue and alerting engine. |
+| **[📊 Reporting Solution Spec](REPORTING_SOLUTION.md)** | Architectural specification for the branded multi-sheet Excel, PDF, and CSV reporting engine. |
+
+---
+
+## 🌟 Key Platform Highlights
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        DMARC SENTINEL CAPABILITIES                     │
+├──────────────────────────────────┬─────────────────────────────────────┤
+│ 1. Executive Telemetry           │ 2. Live Domain Health Analyzer      │
+│    • Real-time pass rate KPIs    │    • Live DNS RFC protocol audit    │
+│    • Message-count weighting     │    • SPF 10-lookup counter tree     │
+│    • Volume trends over time     │    • DMARC, DKIM, BIMI, MTA-STS     │
+├──────────────────────────────────┼─────────────────────────────────────┤
+│ 3. 4-Way Alignment Engine        │ 4. SOC Threat Feed & Forensics      │
+│    • SPF & DKIM pass/fail matrix │    • Attacker ASN/ISP attribution   │
+│    • Override reason tracking    │    • Rogue IP rankings              │
+│    • DKIM selector inventory     │    • Containment & blocking rate    │
+├──────────────────────────────────┼─────────────────────────────────────┤
+│ 5. Global Geolocation GIS Map    │ 6. Automated Enterprise Reporting   │
+│    • Esri Dark/Light, OSM, Sat   │    • Branded Vector PDFs            │
+│    • Zero API Key required       │    • Multi-sheet formatted Excel    │
+│    • Origin threat clusters      │    • Scheduled timezone cron email  │
+├──────────────────────────────────┼─────────────────────────────────────┤
+│ 7. Real-Time Alert Engine        │ 8. Secure SMTP & Email Queue        │
+│    • 7 security conditions       │    • AES-256-GCM secret encryption  │
+│    • Dry-run simulation engine   │    • 3-step live socket test modal  │
+│    • Recovery notifications      │    • Atomic transactional worker    │
+└──────────────────────────────────┴─────────────────────────────────────┘
+```
+
+---
 
 ## 📁 Repository Structure
 
 ```
 .
-├── README.md
-├── web/                             # Custom React + Vite + Express Web Dashboard
-│   ├── client/                      # React 19 + Tailwind CSS v4 + Recharts UI
-│   └── server/                      # Express.js OpenSearch API proxy
-├── dashboards/
-│   └── dmarc-overview.json          # Main Grafana dashboard (uid: dmarc-overview)
-├── provisioning/
-│   ├── datasources/
-│   │   └── opensearch.yml            # OpenSearch datasource with env-var credentials
-│   ├── dashboards/
-│   │   └── dmarc.yml                 # Dashboard auto-provisioning config
-│   └── alerting/
-│       └── dmarc-alerts.yml          # 4 alert rules (disabled by default)
-├── opensearch/
-│   ├── index-template.json           # Explicit field mappings for dmarc_aggregate-*
-│   ├── read-only-role.json           # Security role definition
-│   └── setup-opensearch-readonly.sh  # Script to create role + user
-└── scripts/
-    └── seed-test-data.sh             # Bulk-index ~45 synthetic test records
+├── docs/                               # Comprehensive System Documentation
+│   ├── FEATURES_LIST.md                # Exhaustive features & capabilities matrix
+│   ├── ARCHITECTURE.md                 # System topology, data flow, DB schema, security
+│   ├── API_REFERENCE.md                # Complete REST API reference & payload specs
+│   └── DEPLOYMENT_GUIDE.md             # Production Linux, Nginx, systemd, SSL setup
+├── web/                                # Full-Stack Web Application
+│   ├── client/                         # React 19 + Vite + Tailwind CSS v4 + Recharts UI
+│   │   ├── src/components/             # UI Tab views, charts, GIS map, modals
+│   │   ├── src/i18n/                   # Multilingual translations (EN, AR [RTL], FR, ES)
+│   │   └── src/theme/                  # Dynamic themes (Sentinel Dark, Nordic, Emerald)
+│   └── server/                         # Express.js API & Background Services
+│       ├── db.js                       # SQLite database manager (better-sqlite3)
+│       ├── auth.js                     # JWT authentication & domain scoping RBAC
+│       ├── services/crypto.js          # AES-256-GCM authenticated encryption
+│       ├── services/emailService.js    # Nodemailer transport & template renderer
+│       ├── workers/emailQueueWorker.js # Transactional email queue background worker
+│       ├── workers/alertEvaluator.js   # 60s rule evaluation & incident generator
+│       ├── workers/reportScheduler.js  # Timezone-aware cron report scheduler
+│       ├── templates/                  # Responsive HTML email templates
+│       └── server.js                   # REST API routes & reverse proxy handlers
+├── reporting/                          # Standalone Python Reporting Microservice
+│   ├── report_service.py               # FastAPI microservice for report generation
+│   ├── engine/pdf_generator.py         # Playwright Chromium vector PDF generator
+│   ├── engine/excel_generator.py       # openpyxl multi-sheet formatted Excel (.xlsx)
+│   ├── engine/csv_generator.py         # UTF-8 raw CSV generator
+│   ├── templates/                      # Branded report templates (default, acme)
+│   └── output/                         # Generated report artifacts
+├── dashboards/                         # Native Grafana Dashboards
+│   └── dmarc-overview.json             # 6-row, 25-panel Grafana dashboard
+├── provisioning/                       # Grafana Auto-Provisioning Assets
+│   ├── datasources/opensearch.yml      # OpenSearch datasource configuration
+│   ├── dashboards/dmarc.yml            # Dashboard auto-loader
+│   └── alerting/dmarc-alerts.yml       # Grafana alert rules
+├── opensearch/                         # OpenSearch Cluster Assets
+│   ├── index-template.json             # Explicit mapping template for dmarc_aggregate-*
+│   ├── read-only-role.json             # Least-privilege read-only role definition
+│   └── setup-opensearch-readonly.sh    # User provisioning automation script
+└── docker-compose.yml                  # Docker Compose configuration (Mailpit, Python)
 ```
 
-## 🚀 Quick Start
+---
 
-### 1. Set environment variables
+## ⚡ Quick Start (Development)
+
+### 1. Prerequisites
+* Node.js `v20+` or `v22+`
+* Python `3.10+` with virtual environment
+* OpenSearch `2.x` or `3.x` cluster (or remote endpoint)
+
+### 2. Configure Backend Server
+```bash
+cd web/server
+npm install
+npm rebuild better-sqlite3 --build-from-source
+
+# Copy and edit environment variables
+cp .env.example .env # edit with your OPENSEARCH_URL & OPENSEARCH_PASSWORD
+```
+
+### 3. Start Backend Services
+```bash
+npm run dev
+# Server listens on http://localhost:5000
+```
+
+### 4. Start Frontend Client
+```bash
+cd ../client
+npm install
+npm run dev
+# Frontend runs on http://localhost:3000 (proxies /api to :5000)
+```
+
+Open **http://localhost:3000** in your browser. Default admin credentials seeded automatically:
+* **Username**: `admin`
+* **Password**: `admin123` *(Prompted to change on first login)*
+
+---
+
+## 🧪 Automated Testing
+
+Execute the backend automated test suite verifying cryptography, RFC sanitization, responsive email templates, alert conditions, and mock SMTP socket delivery:
 
 ```bash
-export OPENSEARCH_USER=grafana_reader
-export OPENSEARCH_PASSWORD=<your-password>
+node web/server/test-suite.js
 ```
 
-### 2. Apply the index template (optional, for new indices)
-
-```bash
-curl -sk -X PUT "https://172.105.135.195:9200/_index_template/dmarc_aggregate_template" \
-  -u admin:<admin-password> \
-  -H 'Content-Type: application/json' \
-  -d @opensearch/index-template.json
-```
-
-### 3. Create the read-only OpenSearch user
-
-```bash
-export OPENSEARCH_ADMIN_USER=admin
-export OPENSEARCH_ADMIN_PASS=<admin-password>
-export GRAFANA_OS_USER=grafana_reader
-export GRAFANA_OS_PASS=<choose-a-strong-password>
-bash opensearch/setup-opensearch-readonly.sh
-```
-
-### 4. Deploy provisioning files to Grafana
-
-Copy into your Grafana config directory:
-
-```bash
-# Datasource
-cp provisioning/datasources/opensearch.yml /etc/grafana/provisioning/datasources/
-
-# Dashboard provisioning
-cp provisioning/dashboards/dmarc.yml /etc/grafana/provisioning/dashboards/
-
-# Dashboard JSON
-mkdir -p /etc/grafana/dashboards
-cp dashboards/dmarc-overview.json /etc/grafana/dashboards/
-
-# Alert rules (optional)
-cp provisioning/alerting/dmarc-alerts.yml /etc/grafana/provisioning/alerting/
-
-# Restart Grafana
-sudo systemctl restart grafana-server
-```
-
-### 5. Seed test data (optional)
-
-```bash
-export OPENSEARCH_PASSWORD=<password>
-bash scripts/seed-test-data.sh
-```
-
-Then set the Grafana time range to **2026-10-01 to 2026-10-05** to see all test data.
-
-## 📊 Dashboard Layout
-
-| Row | Title | Panels |
-|-----|-------|--------|
-| 1 | **Overview** | Total Emails, DMARC Pass Rate (%), DMARC Failures, Messages Affected, Domains Monitored, Reports Received, Unique Sending IPs |
-| 2 | **Authentication & Alignment** | SPF Result Pie, DKIM Result Pie, SPF Alignment Pie, DKIM Alignment Pie, Alignment Matrix Table, Disposition Over Time, Authenticated but Not Aligned, Auth Method That Saved the Message (pie + time series) |
-| 3 | **Traffic Analysis** | Messages Over Time (pass/fail), Top Sending IPs, Top Domains, Top Source Orgs, Reporting Orgs, Country Breakdown, Header/Envelope From Mismatch |
-| 4 | **Security & Threat Intelligence** | 🌍 Global Attack Origin & Threat Heatmap (Geomap), 🏴‍☠️ Attacker Geolocation Breakdown, 🏢 Top Threat Networks (ASNs & ISPs), 🛡️ Attack Containment & Blocking Rate, 🚨 SOC Live Threat Feed & Forensics, DMARC Failures by IP, Unauthorized Senders, SPF Failures, DKIM Failures, Quarantine/Reject Over Time, Spoofing Suspects |
-| 5 | **Policy & Enforcement** | Published Policies Table, Policy State Timeline, Enforcement Readiness %, Would-Be Impact, Readiness Guide |
-| 6 | **Data Health** | Reports Per Day, Last Report Per Reporting Org |
-
-## 🔑 Field Mapping Decisions
-
-All string fields in the live `dmarc_aggregate-*` mapping are typed as `text` with a `.keyword` sub-field. This means:
-
-| Usage | Field Suffix |
-|-------|-------------|
-| **Terms aggregation** (group-by, pie charts, variables) | `.keyword` |
-| **Full-text search** (Lucene query) | `.keyword` (for exact match) or bare (for analyzed) |
-| **Boolean fields** (`passed_dmarc`, `dkim_aligned`, `spf_aligned`) | No suffix needed |
-| **Numeric fields** (`message_count`, `published_policy.pct`) | No suffix needed |
-| **Date fields** (`date_begin`, `date_end`) | No suffix needed |
-
-**Every volume metric uses `Sum of message_count`**, never document count. This is critical because a single DMARC aggregate record can represent hundreds of emails.
-
-### Enrichment fields
-
-The following fields are populated by parsedmarc's IP enrichment and may be absent in older data:
-
-- `source_name` — Human-readable name of the sending organization
-- `source_base_domain` — Base domain of the sending IP's reverse DNS
-- `source_reverse_dns` — Full reverse DNS of the source IP
-- `source_country` — ISO country code of the source IP
-- `source_type` — Classification (e.g., "forwarded", "direct", "suspicious")
-
-Panels using these fields include `_exists_:` guards in their Lucene queries so they degrade gracefully (show empty) when the fields are missing.
-
-## 🛡️ IP Allowlist (known_ips)
-
-The **Unauthorized Senders** and **Spoofing Suspects** panels use the `known_ips` dashboard variable to exclude legitimate senders from the "bad actors" view.
-
-### How it works
-
-1. The `known_ips` variable is a **textbox** variable at the top of the dashboard
-2. Enter your authorized sending IPs, **space-separated** (Lucene OR syntax)
-3. The panels use `NOT source_ip_address.keyword:($known_ips)` to exclude them
-
-### Example value
-
-```
-209.85.220.41 40.107.22.100 192.0.2.50 185.70.40.5
-```
-
-### Maintaining the allowlist
-
-- **Add IPs**: Click the variable dropdown, edit the text, add new IPs separated by spaces
-- **Remove IPs**: Edit the variable and remove the IP
-- **Persist changes**: To make the default permanent, edit `known_ips` in `dashboards/dmarc-overview.json` → `templating.list` → find `"name": "known_ips"` → update `"query"` and `"current.text"`/`"current.value"`
-
-### For alert rules
-
-The alert rule "Non-allowlisted IP sending >50 failing messages" has its own `NOT source_ip_address.keyword:(...)` clause hardcoded in the query. Update it in `provisioning/alerting/dmarc-alerts.yml` when your allowlist changes.
-
-## ⚠️ Alert Rules
-
-Four alert rules are provisioned in `provisioning/alerting/dmarc-alerts.yml`, all **disabled (paused) by default**:
-
-| Alert | Condition | Severity |
-|-------|-----------|----------|
-| DMARC pass rate below 90% | Pass rate < 90% for any domain over 24h | Warning |
-| Non-allowlisted IP volume | >50 failing messages from unknown IP in 24h | Critical |
-| Missing major reporter | No reports from Google/Microsoft/Yahoo in 48h | Warning |
-| High-volume reject | >100 messages with reject disposition in 24h | Critical |
-
-To enable alerts:
-1. Navigate to **Alerting → Alert rules** in Grafana
-2. Find the DMARC rules
-3. Click **Enable** (un-pause) on the ones you want active
-4. Configure a **notification policy** and **contact point** (email, Slack, etc.)
-
-## 🔍 Troubleshooting
-
-### Panels show "No data"
-
-1. **Check the time range**: Ensure it covers the dates of your indexed data
-2. **Check variable values**: Click each variable dropdown and verify values are loaded. If empty, the datasource may not be connecting
-3. **Check the index pattern**: The datasource must point to `dmarc_aggregate-*` with `date_begin` as the time field
-
-### Panels show errors about field types
-
-If you see aggregation errors:
-- Verify the mapping with `GET dmarc_aggregate-*/_mapping`
-- String fields must be aggregated on their `.keyword` sub-field
-- If a field is mapped as `text` without a `.keyword` sub-field, you need to reindex with the template from `opensearch/index-template.json`
-
-### .keyword issues
-
-All string fields in the dashboard use `.keyword` for aggregations. If your mapping uses direct `keyword` type (without `text` parent), remove the `.keyword` suffix from:
-- All `field` references in `bucketAggs`
-- All `field` references in `metrics` (for `cardinality`)
-- All variable queries
-
-### Time zone issues
-
-The dashboard uses UTC timezone. If your `date_begin` values are in a different timezone, either:
-- Change the dashboard timezone setting (gear icon → Settings → Time Options)
-- Normalize dates to UTC before indexing
-
-### Pass rate doesn't match expected value
-
-The pass rate calculation uses:
-- **Query A**: Sum of `message_count` (all records matching filters)
-- **Query B**: Sum of `message_count` where `passed_dmarc:true`
-- **Transformation**: `B / A × 100`
-
-If it looks wrong:
-1. Check that `passed_dmarc` is a `boolean` field (not a string "true"/"false")
-2. Verify the time range captures all relevant data
-3. Cross-check with: `GET dmarc_aggregate-*/_search` with appropriate aggregation
-
-### Seed data validation
-
-After running `seed-test-data.sh`, with the time range set to `2026-10-01 to 2026-10-05`:
-- **Total emails**: 2870
-- **DMARC pass rate**: 85.78%
-- **DMARC failures**: 408
-- **Domains monitored**: 3 (example.com, shop.example.com, corp.example.org)
-- **Unique sending IPs**: 9
-
-## 🖥️ Custom Web Dashboard (DMARC Sentinel)
-
-A standalone, custom-branded web dashboard built with **React 19**, **Vite**, **Tailwind CSS v4**, and **Express.js** that connects directly to OpenSearch.
-
-### Running the Custom Web App
-
-1. **Start the Backend API Server (Port 5000)**:
-   ```bash
-   cd web/server
-   npm install
-   npm run dev
-   ```
-
-2. **Start the Frontend Client (Port 3000)**:
-   ```bash
-   cd web/client
-   npm install
-   npm run dev
-   ```
-
-3. Open **http://localhost:3000** in your browser.
-
-Features:
-- **Executive KPI Grid**: Total emails, real-time pass rate, quarantine/reject count.
-- **Authentication & Alignment**: SPF and DKIM donut charts with 4-way alignment matrix.
-- **Volume & Trends**: Area chart showing daily traffic and authentication outcomes.
-- **SOC Threat Feed**: Live unaligned and spoofed email events, top attack geo and ASNs.
-- **Policy Audit**: Evaluates `p=none`, `quarantine`, `reject` policies and readiness.
-- **Raw Log Explorer**: Search and inspect full OpenSearch parsed aggregate documents.
-
-## 📋 Requirements
-
-- **Grafana** ≥ 10.0 with the `grafana-opensearch-datasource` plugin installed
-- **OpenSearch** ≥ 2.x with the Security plugin enabled (for role-based access)
-- **Data source**: parsedmarc or compatible tool writing to `dmarc_aggregate-*` daily indices
-
-## 🏗️ Panel Limitations & Known Issues
-
-| Panel | Limitation | Workaround |
-|-------|-----------|------------|
-| Header/Envelope-From Mismatch | Uses `raw_document` with extract transform; limited to 100 docs | Increase `size` in the query or add stricter filters |
-| Published Policy Table | Uses `raw_document` + `groupBy` transform; heavy on large datasets | Narrow the time range or filter by domain |
-| Policy State Timeline | Requires `extractFields` from `_source`; may be slow with many records | Narrow time range |
-| Country Breakdown | No geomap (requires lat/lon); uses bar chart instead | Add geo-IP coordinates to index for map visualization |
-| Auth Method Pie | Uses 4 separate queries (one per category) | Inherent to the calculation approach; cannot be simplified |
-| Authenticated but Not Aligned stat | Complex compound Lucene query may miss edge cases with multiple results in nested arrays | Verified against seed data |
+---
 
 ## 📄 License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
