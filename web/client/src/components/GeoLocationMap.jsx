@@ -362,6 +362,18 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
               </button>
               <button
                 type="button"
+                onClick={() => setActiveLayer('osm')}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  activeLayer === 'osm'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="OpenStreetMap"
+              >
+                Street
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveLayer('satellite')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition ${
                   activeLayer === 'satellite'

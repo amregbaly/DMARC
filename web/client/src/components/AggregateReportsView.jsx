@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { fetchAggregateViews } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import GeoLocationMap from './GeoLocationMap';
 
 // Helper for country flags
 function getCountryFlag(countryCode) {
@@ -1558,190 +1559,14 @@ export default function AggregateReportsView({
       {/* ======================================================== */}
       {/* VIEW 7: GEOLOCATION REPORT (INTERACTIVE WORLD MAP)       */}
       {/* ======================================================== */}
+      {/* VIEW 7: GEOLOCATION REPORT                               */}
+      {/* ======================================================== */}
       {subView === 'geolocation' && (
-        <div className="space-y-6">
-          {/* Global Visualizer Canvas */}
-          <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Globe2 className="w-4 h-4 text-cyan-400" />
-                  {t('reports.geoTitle', 'Global Origin Geographic Distribution')}
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {t('reports.geoSubtitle', 'Plotted origin coordinates of mail transfer agents delivering mail for monitored domains.')}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1.5 text-emerald-400">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" /> {t('reports.compliant', 'Compliant')}
-                </span>
-                <span className="flex items-center gap-1.5 text-rose-400">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" /> {t('reports.threatFailedLabel', 'Threat / Failed')}
-                </span>
-              </div>
-            </div>
-
-            {/* Stylized World Map SVG with plotted coordinates */}
-            <div className="relative w-full h-80 rounded-2xl bg-slate-950 border border-slate-800/80 overflow-hidden flex items-center justify-center">
-              {/* Map Grid / Continental Vector background */}
-              <svg className="w-full h-full opacity-40" viewBox="0 0 1000 500">
-                <defs>
-                  <radialGradient id="mapGlow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#0891b2" stopOpacity="0.15" />
-                    <stop offset="100%" stopColor="#020617" stopOpacity="0" />
-                  </radialGradient>
-                </defs>
-                <rect width="1000" height="500" fill="url(#mapGlow)" />
-                {/* Lat/Long Grid lines */}
-                <line x1="0" y1="250" x2="1000" y2="250" stroke="#1e293b" strokeDasharray="4 4" />
-                <line x1="500" y1="0" x2="500" y2="500" stroke="#1e293b" strokeDasharray="4 4" />
-                <line x1="250" y1="0" x2="250" y2="500" stroke="#0f172a" strokeDasharray="4 4" />
-                <line x1="750" y1="0" x2="750" y2="500" stroke="#0f172a" strokeDasharray="4 4" />
-
-                {/* Continental outlines (simplified aesthetic vector geometry) */}
-                <path
-                  d="M150,120 Q200,90 280,110 T330,190 T280,260 T210,240 T150,180 Z"
-                  fill="#1e293b"
-                  opacity="0.3"
-                />
-                <path
-                  d="M260,280 Q320,300 340,380 T300,470 T260,420 T230,320 Z"
-                  fill="#1e293b"
-                  opacity="0.3"
-                />
-                <path
-                  d="M450,110 Q540,80 620,130 T580,210 T490,190 T430,130 Z"
-                  fill="#1e293b"
-                  opacity="0.3"
-                />
-                <path
-                  d="M480,220 Q560,230 580,310 T520,440 T460,370 T440,260 Z"
-                  fill="#1e293b"
-                  opacity="0.3"
-                />
-                <path
-                  d="M600,100 Q780,80 880,140 T850,260 T720,280 T610,190 Z"
-                  fill="#1e293b"
-                  opacity="0.3"
-                />
-                <path
-                  d="M740,320 Q840,310 870,380 T800,430 T730,370 Z"
-                  fill="#1e293b"
-                  opacity="0.3"
-                />
-              </svg>
-
-              {/* Plotted IP Nodes */}
-              <div className="absolute inset-0 pointer-events-auto">
-                {geoPoints.map((pt, idx) => {
-                  // Equirectangular projection mapping:
-                  // x = ((lng + 180) / 360) * 100%
-                  // y = ((90 - lat) / 180) * 100%
-                  const x = ((pt.lng + 180) / 360) * 100;
-                  const y = ((90 - pt.lat) / 180) * 100;
-                  return (
-                    <div
-                      key={idx}
-                      style={{ left: `${x}%`, top: `${y}%` }}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer"
-                    >
-                      {/* Pulse Ring */}
-                      <span
-                        className={`absolute -inset-1.5 rounded-full animate-ping opacity-75 ${
-                          pt.compliant ? 'bg-emerald-500' : 'bg-rose-500'
-                        }`}
-                      />
-                      {/* Center Dot */}
-                      <span
-                        className={`relative block w-3 h-3 rounded-full border-2 border-slate-950 shadow-md ${
-                          pt.compliant ? 'bg-emerald-400' : 'bg-rose-500'
-                        }`}
-                      />
-
-                      {/* Tooltip on hover */}
-                      <div className="hidden group-hover:flex flex-col absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl shadow-2xl z-30 whitespace-nowrap text-[10px]">
-                        <span className="font-bold text-white flex items-center gap-1.5">
-                          <span>{getCountryFlag(pt.country)}</span>
-                          <span>{pt.ip}</span>
-                        </span>
-                        <span className="text-slate-400 font-mono">{pt.hostname}</span>
-                        <span className="text-white mt-0.5">{t('reports.colVolume', 'Volume')}: {pt.volume}</span>
-                        <span className={pt.compliant ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                          {pt.compliant ? t('reports.dmarcCompliant', 'DMARC Compliant') : t('reports.threatFailedLabel', 'Failed / Threat')}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Geo Locations Itemized List */}
-          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-                {t('reports.detectedOriginTitle', 'Detected Origin Locations & Threat Exposure')}
-              </h4>
-              <span className="text-xs text-slate-400 font-mono">
-                {t('reports.locationsPlotted', '{count} locations plotted').replace('{count}', geoPoints.length)}
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
-                  <tr>
-                    <th className="py-3 px-4">{t('reports.colCountryFlag', 'Country & Flag')}</th>
-                    <th className="py-3 px-4">{t('reports.colIpAddress', 'IP Address')}</th>
-                    <th className="py-3 px-4">{t('reports.colPtrHostname', 'PTR Hostname')}</th>
-                    <th className="py-3 px-4 text-right">{t('reports.colMessages', 'Messages')}</th>
-                    <th className="py-3 px-4 text-right">{t('reports.statusVerdict', 'Status')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                  {geoPoints.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="py-8 text-center text-slate-500">
-                        {t('reports.noGeoPoints', 'No geolocation points available.')}
-                      </td>
-                    </tr>
-                  ) : (
-                    geoPoints.map((pt, idx) => (
-                      <tr key={idx} className="hover:bg-slate-800/30 transition">
-                        <td className="py-3 px-4 flex items-center gap-2 font-bold text-white">
-                          <span className="text-base">{getCountryFlag(pt.country)}</span>
-                          <span>{pt.country}</span>
-                        </td>
-                        <td className="py-3 px-4 font-mono font-bold text-cyan-300">
-                          {pt.ip}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-slate-300">
-                          {pt.hostname}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-bold text-white">
-                          {pt.volume.toLocaleString()}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {pt.compliant ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              {t('reports.compliant', 'Compliant')}
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                              {t('reports.threatLabel', 'Threat')}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <GeoLocationMap
+          geoPoints={geoPoints}
+          getCountryFlag={getCountryFlag}
+          t={t}
+        />
       )}
 
       {/* ======================================================== */}

@@ -128,27 +128,74 @@ app.use(helmet({
 }));
 
 const defaultAllowedOrigins = [
+  'https://dmarc.voxera.net',
+  'http://dmarc.voxera.net',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:5173'
 ];
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
-  : defaultAllowedOrigins;
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
+if (process.env.APP_URL) {
+  try {
+    const appOrigin = new URL(process.env.APP_URL).origin;
+    if (!defaultAllowedOrigins.includes(appOrigin)) {
+      defaultAllowedOrigins.push(appOrigin);
     }
-    return callback(new Error('Blocked by CORS policy'));
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+  } catch (e) {}
+}
+
+const envAllowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : [];
+
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
+
+function isOriginAllowed(origin, req) {
+  if (!origin) return true; // Non-browser / curl / same-origin direct requests
+  if (allowedOrigins.includes('*')) return true;
+  if (allowedOrigins.includes(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+
+    // Dynamic whitelist for voxera.net and subdomains
+    if (url.hostname === 'voxera.net' || url.hostname.endsWith('.voxera.net')) {
+      return true;
+    }
+
+    // Dynamic localhost / internal development
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      return true;
+    }
+
+    // Reverse-proxy check: matches Host or X-Forwarded-Host from Nginx
+    const hostHeader = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
+    if (hostHeader) {
+      const cleanHost = hostHeader.split(':')[0].toLowerCase();
+      if (url.hostname.toLowerCase() === cleanHost) {
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+app.use((req, res, next) => {
+  cors({
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin, req)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    credentials: true,
+    optionsSuccessStatus: 200
+  })(req, res, next);
+});
 
 app.use(express.json());
 
