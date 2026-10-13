@@ -11,37 +11,88 @@ import {
   ShieldCheck, 
   ShieldAlert, 
   Radio, 
-  ExternalLink 
+  ExternalLink,
+  Key,
+  X,
+  Check,
+  Info
 } from 'lucide-react';
 import { useTheme } from '../theme/ThemeContext';
 
-// Tile provider definitions with dark mode defaults
+// High-Definition Tile Providers: 100% Free & No API Key Required
 const TILE_LAYERS = {
   dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    subdomains: 'abcd',
-    maxZoom: 19
+    id: 'dark',
+    name: 'Dark Canvas',
+    base: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    reference: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/" target="_blank" rel="noreferrer">Esri</a>, HERE, Garmin, USGS',
+    maxZoom: 16
   },
   light: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    subdomains: 'abcd',
-    maxZoom: 19
+    id: 'light',
+    name: 'Light Canvas',
+    base: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    reference: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/" target="_blank" rel="noreferrer">Esri</a>, HERE, Garmin, USGS',
+    maxZoom: 16
   },
   osm: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    id: 'osm',
+    name: 'OpenStreetMap',
+    base: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
     subdomains: 'abc',
     maxZoom: 19
   },
   satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: '&copy; Esri &copy; USGS, NOAA',
-    subdomains: '',
+    id: 'satellite',
+    name: 'Satellite',
+    base: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    reference: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/" target="_blank" rel="noreferrer">Esri</a>, Maxar, Earthstar',
     maxZoom: 18
+  },
+  carto_dark: {
+    id: 'carto_dark',
+    name: 'CARTO Dark',
+    base: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/" target="_blank" rel="noreferrer">CARTO</a> &copy; OpenStreetMap',
+    subdomains: 'abcd',
+    maxZoom: 19,
+    requiresKey: true
   }
 };
+
+function buildTileLayer(provider, cartoKey = '') {
+  if (provider.requiresKey) {
+    const keyParam = cartoKey ? `?key=${encodeURIComponent(cartoKey.trim())}` : '';
+    return L.tileLayer(provider.base + keyParam, {
+      attribution: provider.attribution,
+      subdomains: provider.subdomains || 'abcd',
+      maxZoom: provider.maxZoom || 19
+    });
+  }
+
+  const layers = [];
+  const base = L.tileLayer(provider.base, {
+    attribution: provider.attribution,
+    subdomains: provider.subdomains || '',
+    maxZoom: provider.maxZoom || 18
+  });
+  layers.push(base);
+
+  if (provider.reference) {
+    const ref = L.tileLayer(provider.reference, {
+      subdomains: provider.subdomains || '',
+      maxZoom: provider.maxZoom || 18,
+      pane: 'tilePane'
+    });
+    layers.push(ref);
+  }
+
+  return L.layerGroup(layers);
+}
 
 export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
   const mapContainerRef = useRef(null);
@@ -53,6 +104,12 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
   const [activeLayer, setActiveLayer] = useState(isDark ? 'dark' : 'light');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPoint, setSelectedPoint] = useState(null);
+
+  const [cartoApiKey, setCartoApiKey] = useState(() => {
+    return localStorage.getItem('dmarc_carto_api_key') || (import.meta.env && import.meta.env.VITE_CARTO_API_KEY) || '';
+  });
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [tempKey, setTempKey] = useState('');
 
   // Automatically update map tile layer when theme changes
   useEffect(() => {
@@ -123,14 +180,9 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
       });
 
       // Add default tile layer
-      const provider = TILE_LAYERS[activeLayer];
-      const tiles = L.tileLayer(provider.url, {
-        attribution: provider.attribution,
-        subdomains: provider.subdomains,
-        maxZoom: provider.maxZoom
-      }).addTo(map);
-
-      tileLayerRef.current = tiles;
+      const provider = TILE_LAYERS[activeLayer] || TILE_LAYERS.dark;
+      const layer = buildTileLayer(provider, cartoApiKey).addTo(map);
+      tileLayerRef.current = layer;
 
       // Group for markers
       const markersGroup = L.layerGroup().addTo(map);
@@ -162,7 +214,7 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
     };
   }, []);
 
-  // Update Tile Layer when layer selector changes
+  // Update Tile Layer when layer selector or API key changes
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
@@ -172,14 +224,9 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
     }
 
     const provider = TILE_LAYERS[activeLayer] || TILE_LAYERS.dark;
-    const tiles = L.tileLayer(provider.url, {
-      attribution: provider.attribution,
-      subdomains: provider.subdomains,
-      maxZoom: provider.maxZoom
-    }).addTo(map);
-
-    tileLayerRef.current = tiles;
-  }, [activeLayer]);
+    const layer = buildTileLayer(provider, cartoApiKey).addTo(map);
+    tileLayerRef.current = layer;
+  }, [activeLayer, cartoApiKey]);
 
   // Render & Update Markers
   useEffect(() => {
@@ -344,9 +391,9 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title={t('reports.layerDark', 'Carto Dark')}
+                title="Esri Dark Gray Canvas (High definition dark theme - No API Key)"
               >
-                {t('reports.layerDark', 'Carto Dark')}
+                Dark Canvas
               </button>
               <button
                 type="button"
@@ -356,9 +403,9 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title={t('reports.layerLight', 'Carto Light')}
+                title="Esri Light Gray Canvas (No API Key)"
               >
-                {t('reports.layerLight', 'Carto Light')}
+                Light
               </button>
               <button
                 type="button"
@@ -368,7 +415,7 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="OpenStreetMap"
+                title="OpenStreetMap (Standard street map - No API Key)"
               >
                 Street
               </button>
@@ -380,10 +427,24 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title={t('reports.layerSatellite', 'Satellite')}
+                title="Esri World Imagery with boundaries (No API Key)"
               >
-                {t('reports.layerSatellite', 'Satellite')}
+                Satellite
               </button>
+              {cartoApiKey && (
+                <button
+                  type="button"
+                  onClick={() => setActiveLayer('carto_dark')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                    activeLayer === 'carto_dark'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="CARTO Dark Matter (With configured API key)"
+                >
+                  CARTO Dark
+                </button>
+              )}
             </div>
 
             {/* Reset View Button */}
@@ -395,6 +456,24 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
             >
               <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
               <span>{t('reports.resetView', 'Reset')}</span>
+            </button>
+
+            {/* Map API Key Settings Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setTempKey(cartoApiKey);
+                setShowKeyModal(true);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition shadow-sm ${
+                cartoApiKey 
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20' 
+                  : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700 hover:border-slate-600'
+              }`}
+              title="Map API Key & Provider Settings"
+            >
+              <Key className={`w-3.5 h-3.5 ${cartoApiKey ? 'text-emerald-400' : 'text-amber-400'}`} />
+              <span>{cartoApiKey ? 'Key Active' : 'API Key (Optional)'}</span>
             </button>
           </div>
         </div>
@@ -594,6 +673,124 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
           </table>
         </div>
       </div>
+
+      {/* API Key & Provider Configuration Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="glass-panel w-full max-w-lg rounded-2xl border border-slate-700/80 bg-slate-900/95 p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Map Tile & API Key Settings</h3>
+                  <p className="text-xs text-slate-400">Configure map tile providers and custom basemap keys</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeyModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Default Status Info */}
+            <div className="rounded-xl p-3.5 bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <span className="font-bold text-emerald-300">No API Key Required by Default!</span>
+                <p className="text-slate-300 leading-relaxed">
+                  The default map layers (<strong className="text-white">Dark Canvas</strong>, <strong className="text-white">Light Canvas</strong>, <strong className="text-white">Street / OSM</strong>, and <strong className="text-white">Satellite</strong>) are completely free, unmetered, and work out-of-the-box without any registration or API keys.
+                </p>
+              </div>
+            </div>
+
+            {/* Optional CARTO Key Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Globe2 className="w-3.5 h-3.5 text-cyan-400" />
+                  CARTO Basemaps API Key (Optional)
+                </label>
+                <a
+                  href="https://carto.com/basemaps/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 hover:underline font-medium"
+                >
+                  Get free CARTO key
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                If you prefer CARTO Dark Matter basemaps without tile watermarks, you can paste your free CARTO API key here or define it in <code className="text-cyan-300 bg-slate-950 px-1 py-0.5 rounded border border-slate-800">web/client/.env</code> as <code className="text-cyan-300 bg-slate-950 px-1 py-0.5 rounded border border-slate-800">VITE_CARTO_API_KEY</code>.
+              </p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={tempKey}
+                  onChange={(e) => setTempKey(e.target.value)}
+                  placeholder="Paste your CARTO API key or token here..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500 transition"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setTempKey('');
+                  setCartoApiKey('');
+                  localStorage.removeItem('dmarc_carto_api_key');
+                  if (activeLayer === 'carto_dark') {
+                    setActiveLayer(isDark ? 'dark' : 'light');
+                  }
+                  setShowKeyModal(false);
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs font-medium text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 transition"
+              >
+                Clear Key
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowKeyModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 border border-slate-700 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const trimmed = tempKey.trim();
+                    setCartoApiKey(trimmed);
+                    if (trimmed) {
+                      localStorage.setItem('dmarc_carto_api_key', trimmed);
+                      setActiveLayer('carto_dark');
+                    } else {
+                      localStorage.removeItem('dmarc_carto_api_key');
+                      if (activeLayer === 'carto_dark') {
+                        setActiveLayer(isDark ? 'dark' : 'light');
+                      }
+                    }
+                    setShowKeyModal(false);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition shadow-lg shadow-cyan-500/20"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Save & Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
