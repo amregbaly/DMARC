@@ -20,8 +20,164 @@ const db = new Database(DB_PATH);
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
 
+export const DEFAULT_SYSTEM_THEMES = [
+  {
+    id: 'dark',
+    name: 'Cyber Dark',
+    desc: 'Sentinel SOC classic midnight & cyan',
+    category: 'dark',
+    badge: 'Classic SOC',
+    is_default: 0,
+    colors: {
+      bg: '#030712',
+      card: '#0f172a',
+      cardHover: '#1e293b',
+      border: '#1e293b',
+      borderSubtle: '#334155',
+      text: '#f8fafc',
+      textMuted: '#94a3b8',
+      textSubtle: '#64748b',
+      accent: '#06b6d4',
+      accentHover: '#0891b2',
+      glassBg: 'rgba(15, 23, 42, 0.65)',
+      glassBorder: 'rgba(255, 255, 255, 0.07)',
+      sidebarBg: '#030712',
+      sidebarBorder: '#1e293b',
+      sidebarText: '#94a3b8',
+      sidebarTextHover: '#f8fafc',
+      sidebarActiveText: '#22d3ee',
+      sidebarActiveBg: 'rgba(6, 182, 212, 0.15)',
+      sidebarHeaderText: '#64748b',
+      chartGrid: '#1e293b',
+      chartAxis: '#64748b',
+      chartTooltipBg: 'rgba(15, 23, 42, 0.95)',
+      chartTooltipBorder: 'rgba(51, 65, 85, 0.8)',
+      chartTooltipText: '#f8fafc',
+      mapTiles: 'dark'
+    }
+  },
+  {
+    id: 'light',
+    name: 'Executive Light',
+    desc: 'Crisp corporate slate & brilliant white',
+    category: 'light',
+    badge: 'Executive',
+    is_default: 1,
+    colors: {
+      bg: '#f8fafc',
+      card: '#ffffff',
+      cardHover: '#f1f5f9',
+      border: '#e2e8f0',
+      borderSubtle: '#cbd5e1',
+      text: '#0f172a',
+      textMuted: '#475569',
+      textSubtle: '#64748b',
+      accent: '#0284c7',
+      accentHover: '#0369a1',
+      glassBg: 'rgba(255, 255, 255, 0.90)',
+      glassBorder: 'rgba(226, 232, 240, 0.85)',
+      sidebarBg: '#ffffff',
+      sidebarBorder: '#e2e8f0',
+      sidebarText: '#475569',
+      sidebarTextHover: '#0f172a',
+      sidebarActiveText: '#0284c7',
+      sidebarActiveBg: 'rgba(2, 132, 199, 0.12)',
+      sidebarHeaderText: '#64748b',
+      chartGrid: '#e2e8f0',
+      chartAxis: '#64748b',
+      chartTooltipBg: 'rgba(255, 255, 255, 0.98)',
+      chartTooltipBorder: 'rgba(226, 232, 240, 0.9)',
+      chartTooltipText: '#0f172a',
+      mapTiles: 'light'
+    }
+  },
+  {
+    id: 'nordic',
+    name: 'Nordic Frost',
+    desc: 'Cool ice-blue with arctic azure accents',
+    category: 'light',
+    badge: 'Arctic Blue',
+    is_default: 1,
+    colors: {
+      bg: '#f0f4f8',
+      card: '#ffffff',
+      cardHover: '#e8f0f8',
+      border: '#d0e0f0',
+      borderSubtle: '#b8d0e8',
+      text: '#081830',
+      textMuted: '#385878',
+      textSubtle: '#507090',
+      accent: '#2563eb',
+      accentHover: '#1d4ed8',
+      glassBg: 'rgba(255, 255, 255, 0.92)',
+      glassBorder: 'rgba(208, 224, 240, 0.85)',
+      sidebarBg: '#ffffff',
+      sidebarBorder: '#d0e0f0',
+      sidebarText: '#385878',
+      sidebarTextHover: '#081830',
+      sidebarActiveText: '#2563eb',
+      sidebarActiveBg: 'rgba(37, 99, 235, 0.12)',
+      sidebarHeaderText: '#507090',
+      chartGrid: '#dbeafe',
+      chartAxis: '#64748b',
+      chartTooltipBg: 'rgba(255, 255, 255, 0.98)',
+      chartTooltipBorder: 'rgba(191, 219, 254, 0.9)',
+      chartTooltipText: '#081830',
+      mapTiles: 'light'
+    }
+  },
+  {
+    id: 'emerald',
+    name: 'Emerald Sentinel',
+    desc: 'High-trust sage & forest green security',
+    category: 'light',
+    badge: 'Compliance',
+    is_default: 1,
+    colors: {
+      bg: '#f2f7f4',
+      card: '#ffffff',
+      cardHover: '#e8f2ec',
+      border: '#d4e4da',
+      borderSubtle: '#b8d0c2',
+      text: '#081c10',
+      textMuted: '#3a5c48',
+      textSubtle: '#527460',
+      accent: '#059669',
+      accentHover: '#047857',
+      glassBg: 'rgba(255, 255, 255, 0.92)',
+      glassBorder: 'rgba(212, 228, 218, 0.85)',
+      sidebarBg: '#ffffff',
+      sidebarBorder: '#d4e4da',
+      sidebarText: '#3a5c48',
+      sidebarTextHover: '#081c10',
+      sidebarActiveText: '#059669',
+      sidebarActiveBg: 'rgba(5, 150, 105, 0.12)',
+      sidebarHeaderText: '#527460',
+      chartGrid: '#d1fae5',
+      chartAxis: '#475569',
+      chartTooltipBg: 'rgba(255, 255, 255, 0.98)',
+      chartTooltipBorder: 'rgba(167, 243, 208, 0.9)',
+      chartTooltipText: '#081c10',
+      mapTiles: 'light'
+    }
+  }
+];
+
 export function initDb() {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS system_themes (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      desc TEXT,
+      category TEXT NOT NULL CHECK(category IN ('dark', 'light')),
+      badge TEXT,
+      colors_json TEXT NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_system_themes_is_default ON system_themes(is_default);
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL COLLATE NOCASE,
@@ -31,7 +187,7 @@ export function initDb() {
       organization_name TEXT,
       logo_url TEXT,
       language TEXT NOT NULL DEFAULT 'en',
-      theme TEXT NOT NULL DEFAULT 'dark',
+      theme TEXT NOT NULL DEFAULT 'light',
       parent_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
@@ -237,7 +393,7 @@ export function initDb() {
 
     db.prepare(`
       INSERT INTO users (id, username, email, password_hash, role, organization_name, logo_url, language, theme, parent_id, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'DMARC Sentinel Corp', '', 'en', 'dark', NULL, 1, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'DMARC Sentinel Corp', '', 'en', 'light', NULL, 1, ?, ?)
     `).run(adminId, initialUsername, initialEmail, passwordHash, 'admin', now, now);
 
     console.log(`[BOOTSTRAP] Initial admin created: ${initialEmail} (username: ${initialUsername})`);
@@ -245,6 +401,34 @@ export function initDb() {
       console.log(`[BOOTSTRAP] Temporary Generated Admin Password: ${initialPassword}`);
       console.log(`[BOOTSTRAP] ACTION REQUIRED: Change this password immediately upon first login!`);
     }
+  }
+
+  // Ensure default system themes exist
+  try {
+    const themeCount = db.prepare('SELECT COUNT(*) as count FROM system_themes').get().count;
+    if (themeCount === 0) {
+      const insertTheme = db.prepare(`
+        INSERT INTO system_themes (id, name, desc, category, badge, colors_json, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const now = new Date().toISOString();
+      for (const t of DEFAULT_SYSTEM_THEMES) {
+        insertTheme.run(t.id, t.name, t.desc, t.category, t.badge, JSON.stringify(t.colors), t.is_default, now, now);
+      }
+      console.log(`[BOOTSTRAP] Seeded ${DEFAULT_SYSTEM_THEMES.length} default system themes.`);
+    }
+  } catch (err) {
+    console.error('[BOOTSTRAP] Error seeding system themes:', err);
+  }
+}
+
+export function isValidTheme(themeId) {
+  if (!themeId || typeof themeId !== 'string') return false;
+  try {
+    const row = db.prepare('SELECT id FROM system_themes WHERE id = ? COLLATE NOCASE').get(themeId.trim().toLowerCase());
+    return Boolean(row);
+  } catch (err) {
+    return ['dark', 'light', 'nordic', 'emerald'].includes(themeId.trim().toLowerCase());
   }
 }
 
@@ -316,13 +500,13 @@ export function getAllUsers(caller) {
     organization_name: u.organization_name || '',
     logo_url: u.logo_url || '',
     language: u.language || 'en',
-    theme: u.theme || 'dark',
+    theme: u.theme || 'light',
     is_active: Boolean(u.is_active),
     domains: domainsStmt.all(u.id).map(r => r.domain)
   }));
 }
 
-export function createUser({ email, username, password, role, organization_name = '', logo_url = '', language = 'en', theme = 'dark', parentId = null, domains = [] }) {
+export function createUser({ email, username, password, role, organization_name = '', logo_url = '', language = 'en', theme = 'light', parentId = null, domains = [] }) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const salt = bcrypt.genSaltSync(12);
@@ -335,8 +519,7 @@ export function createUser({ email, username, password, role, organization_name 
   const cleanOrg = (organization_name || '').trim();
   const cleanLogo = (logo_url || '').trim();
   const cleanLang = (language && ['en', 'es'].includes(language.toLowerCase())) ? language.toLowerCase() : 'en';
-  const allowedThemes = ['dark', 'light', 'nordic', 'emerald'];
-  const cleanTheme = (theme && allowedThemes.includes(theme.toLowerCase())) ? theme.toLowerCase() : 'dark';
+  const cleanTheme = (theme && isValidTheme(theme.toLowerCase())) ? theme.toLowerCase() : 'light';
 
   const insertUser = db.prepare(`
     INSERT INTO users (id, username, email, password_hash, role, organization_name, logo_url, language, theme, parent_id, is_active, created_at, updated_at)
@@ -380,8 +563,7 @@ export function updateUser(id, { email, username, password, role, organization_n
     const newOrg = organization_name !== undefined ? (organization_name ? organization_name.trim() : '') : existing.organization_name;
     const newLogo = logo_url !== undefined ? (logo_url ? logo_url.trim() : '') : existing.logo_url;
     const newLang = language !== undefined && ['en', 'es'].includes(language.toLowerCase()) ? language.toLowerCase() : (existing.language || 'en');
-    const allowedThemes = ['dark', 'light', 'nordic', 'emerald'];
-    const newTheme = theme !== undefined && allowedThemes.includes(theme.toLowerCase()) ? theme.toLowerCase() : (existing.theme || 'dark');
+    const newTheme = theme !== undefined && isValidTheme(theme.toLowerCase()) ? theme.toLowerCase() : (existing.theme || 'light');
     const newIsActive = isActive !== undefined ? (isActive ? 1 : 0) : existing.is_active;
 
     db.prepare(`
@@ -414,8 +596,7 @@ export function updateUserProfile(id, { username, organization_name, logo_url, l
   const newOrg = organization_name !== undefined ? organization_name.trim() : (existing.organization_name || '');
   const newLogo = logo_url !== undefined ? logo_url.trim() : (existing.logo_url || '');
   const newLang = language !== undefined && ['en', 'es'].includes(language.toLowerCase()) ? language.toLowerCase() : (existing.language || 'en');
-  const allowedThemes = ['dark', 'light', 'nordic', 'emerald'];
-  const newTheme = theme !== undefined && allowedThemes.includes(theme.toLowerCase()) ? theme.toLowerCase() : (existing.theme || 'dark');
+  const newTheme = theme !== undefined && isValidTheme(theme.toLowerCase()) ? theme.toLowerCase() : (existing.theme || 'light');
 
   db.prepare(`
     UPDATE users
@@ -1239,8 +1420,218 @@ export function markAlertDigestsSent(ids) {
   return db.prepare(`UPDATE alert_digests SET status = 'sent' WHERE id IN (${placeholders})`).run(...ids).changes;
 }
 
+// ==========================================
+// THEME MANAGEMENT FUNCTIONS
+// ==========================================
+
+export function getAllThemes() {
+  const rows = db.prepare('SELECT * FROM system_themes ORDER BY is_default DESC, name ASC').all();
+  return rows.map(r => {
+    let colors = {};
+    try {
+      colors = JSON.parse(r.colors_json);
+    } catch (e) {
+      colors = {};
+    }
+    const isDark = r.category === 'dark';
+    const fallbackSidebar = {
+      sidebarBg: colors.sidebarBg || (isDark ? '#030712' : '#ffffff'),
+      sidebarBorder: colors.sidebarBorder || (isDark ? '#1e293b' : '#e2e8f0'),
+      sidebarText: colors.sidebarText || (isDark ? '#94a3b8' : '#475569'),
+      sidebarTextHover: colors.sidebarTextHover || (isDark ? '#f8fafc' : '#0f172a'),
+      sidebarActiveText: colors.sidebarActiveText || colors.accent || (isDark ? '#22d3ee' : '#0284c7'),
+      sidebarActiveBg: colors.sidebarActiveBg || (isDark ? 'rgba(6, 182, 212, 0.15)' : 'rgba(2, 132, 199, 0.12)'),
+      sidebarHeaderText: colors.sidebarHeaderText || '#64748b'
+    };
+    colors = { ...fallbackSidebar, ...colors };
+    return {
+      id: r.id,
+      name: r.name,
+      desc: r.desc || '',
+      category: r.category,
+      badge: r.badge || '',
+      isDefault: Boolean(r.is_default),
+      colors,
+      preview: {
+        bg: colors.bg || (r.category === 'dark' ? '#030712' : '#ffffff'),
+        card: colors.card || (r.category === 'dark' ? '#0f172a' : '#f8fafc'),
+        border: colors.border || (r.category === 'dark' ? '#1e293b' : '#e2e8f0'),
+        accent: colors.accent || '#06b6d4',
+        text: colors.text || (r.category === 'dark' ? '#f8fafc' : '#0f172a')
+      },
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    };
+  });
+}
+
+export function getThemeById(id) {
+  if (!id) return null;
+  const r = db.prepare('SELECT * FROM system_themes WHERE id = ? COLLATE NOCASE').get(id.trim().toLowerCase());
+  if (!r) return null;
+  let colors = {};
+  try {
+    colors = JSON.parse(r.colors_json);
+  } catch (e) {
+    colors = {};
+  }
+  const isDark = r.category === 'dark';
+  const fallbackSidebar = {
+    sidebarBg: colors.sidebarBg || (isDark ? '#030712' : '#ffffff'),
+    sidebarBorder: colors.sidebarBorder || (isDark ? '#1e293b' : '#e2e8f0'),
+    sidebarText: colors.sidebarText || (isDark ? '#94a3b8' : '#475569'),
+    sidebarTextHover: colors.sidebarTextHover || (isDark ? '#f8fafc' : '#0f172a'),
+    sidebarActiveText: colors.sidebarActiveText || colors.accent || (isDark ? '#22d3ee' : '#0284c7'),
+    sidebarActiveBg: colors.sidebarActiveBg || (isDark ? 'rgba(6, 182, 212, 0.15)' : 'rgba(2, 132, 199, 0.12)'),
+    sidebarHeaderText: colors.sidebarHeaderText || '#64748b'
+  };
+  colors = { ...fallbackSidebar, ...colors };
+  return {
+    id: r.id,
+    name: r.name,
+    desc: r.desc || '',
+    category: r.category,
+    badge: r.badge || '',
+    isDefault: Boolean(r.is_default),
+    colors,
+    preview: {
+      bg: colors.bg || (r.category === 'dark' ? '#030712' : '#ffffff'),
+      card: colors.card || (r.category === 'dark' ? '#0f172a' : '#f8fafc'),
+      border: colors.border || (r.category === 'dark' ? '#1e293b' : '#e2e8f0'),
+      accent: colors.accent || '#06b6d4',
+      text: colors.text || (r.category === 'dark' ? '#f8fafc' : '#0f172a')
+    },
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+
+export function createTheme({ id, name, desc = '', category = 'dark', badge = '', colors = {} }) {
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    throw new Error('Theme name is required');
+  }
+  const cleanCategory = (category && category.toLowerCase() === 'light') ? 'light' : 'dark';
+  let cleanId = (id || name).trim().toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  if (!cleanId || cleanId.length < 2) {
+    cleanId = `theme-${Date.now().toString(36)}`;
+  }
+
+  const existing = getThemeById(cleanId);
+  if (existing) {
+    throw new Error(`A theme with ID "${cleanId}" already exists`);
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO system_themes (id, name, desc, category, badge, colors_json, is_default, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+  `).run(
+    cleanId,
+    name.trim(),
+    desc ? desc.trim() : '',
+    cleanCategory,
+    badge ? badge.trim() : '',
+    JSON.stringify(colors || {}),
+    now,
+    now
+  );
+
+  return getThemeById(cleanId);
+}
+
+export function updateTheme(id, { name, desc, category, badge, colors }) {
+  const existing = getThemeById(id);
+  if (!existing) {
+    throw new Error(`Theme "${id}" not found`);
+  }
+
+  const newName = (name !== undefined && name.trim()) ? name.trim() : existing.name;
+  const newDesc = desc !== undefined ? desc.trim() : existing.desc;
+  const newCategory = (category !== undefined && ['dark', 'light'].includes(category.toLowerCase()))
+    ? category.toLowerCase()
+    : existing.category;
+  const newBadge = badge !== undefined ? badge.trim() : existing.badge;
+  const newColors = colors !== undefined ? { ...existing.colors, ...colors } : existing.colors;
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE system_themes
+    SET name = ?, desc = ?, category = ?, badge = ?, colors_json = ?, updated_at = ?
+    WHERE id = ? COLLATE NOCASE
+  `).run(
+    newName,
+    newDesc,
+    newCategory,
+    newBadge,
+    JSON.stringify(newColors),
+    now,
+    existing.id
+  );
+
+  return getThemeById(existing.id);
+}
+
+export function deleteTheme(id) {
+  const existing = getThemeById(id);
+  if (!existing) {
+    throw new Error(`Theme "${id}" not found`);
+  }
+  if (existing.isDefault) {
+    throw new Error('Default system themes cannot be deleted');
+  }
+
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE users SET theme = 'light' WHERE theme = ? COLLATE NOCASE").run(existing.id);
+    db.prepare("DELETE FROM system_themes WHERE id = ? COLLATE NOCASE").run(existing.id);
+  });
+
+  tx();
+  return { deleted: true, id: existing.id };
+}
+
+export function resetDefaultTheme(id) {
+  const target = DEFAULT_SYSTEM_THEMES.find(t => t.id === (id || '').toLowerCase());
+  if (!target) {
+    throw new Error(`Factory preset for theme "${id}" not found`);
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO system_themes (id, name, desc, category, badge, colors_json, is_default, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      desc = excluded.desc,
+      category = excluded.category,
+      badge = excluded.badge,
+      colors_json = excluded.colors_json,
+      updated_at = excluded.updated_at
+  `).run(
+    target.id,
+    target.name,
+    target.desc,
+    target.category,
+    target.badge,
+    JSON.stringify(target.colors),
+    now,
+    now
+  );
+
+  return getThemeById(target.id);
+}
+
 export default {
   initDb,
+  isValidTheme,
+  getAllThemes,
+  getThemeById,
+  createTheme,
+  updateTheme,
+  deleteTheme,
+  resetDefaultTheme,
   getUserByUsername,
   getUserByEmail,
   getUserByEmailOrUsername,

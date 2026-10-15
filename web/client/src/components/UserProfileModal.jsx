@@ -25,7 +25,7 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onUserU
   const [orgName, setOrgName] = useState(currentUser?.organization_name || '');
   const [logoUrl, setLogoUrl] = useState(currentUser?.logo_url || '');
   const [selectedLang, setSelectedLang] = useState(currentUser?.language || language || 'en');
-  const [selectedTheme, setSelectedTheme] = useState(currentUser?.theme || theme || 'dark');
+  const [selectedTheme, setSelectedTheme] = useState(currentUser?.theme || theme || 'light');
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null); // { type: 'success' | 'error', message: string }
 
@@ -35,7 +35,7 @@ export default function UserProfileModal({ isOpen, onClose, currentUser, onUserU
       setOrgName(currentUser.organization_name || '');
       setLogoUrl(currentUser.logo_url || '');
       setSelectedLang(currentUser.language || language || 'en');
-      setSelectedTheme(currentUser.theme || theme || 'dark');
+      setSelectedTheme(currentUser.theme || theme || 'light');
     }
   }, [currentUser, language, theme]);
 

@@ -44,7 +44,7 @@ This document provides a comprehensive, categorized inventory of every feature, 
 
 ## 2. Live Domain Health & DNS Protocol Analyzer
 
-Replicates the depth, rigor, and visual clarity of **PowerDMARC's Domain Analyzer**:
+Comprehensive, rigorous, and visually clear **Domain Analyzer**:
 
 * **One-Click Live DNS Audit**: Query any apex domain or subdomain in real time using asynchronous recursive `node:dns/promises`.
 * **Domain Security Score (0–100%) & Letter Grade**:
@@ -184,6 +184,18 @@ Replicates the depth, rigor, and visual clarity of **PowerDMARC's Domain Analyze
   * **Branded Vector PDF**: High-resolution, printable PDF with executive cover page, KPI summary boxes, compliance charts, and tabular breakdowns generated via headless browser rendering.
   * **Formatted Multi-Sheet Excel (.xlsx)**: Professional Excel workbook with company logo, frozen headers, styled header columns, and color-coded conditional formatting (`openpyxl`).
   * **UTF-8 CSV**: Clean, machine-readable CSV for ingestion into SIEM or business intelligence platforms.
+* **Aggregate Views Tab-Level Export (PDF & Excel)**:
+  * One-click export for **any active aggregate sub-tab** directly to branded vector **PDF** or formatted **Excel (.xlsx)**.
+  * Supported across all 7 sub-views:
+    1. **Per Sending Source**: Categorized sources (DMARC compatible, Forwarded, Failed) with volume distribution and verification rates.
+    2. **Per Result**: Authentication flows (DMARC correct, Authenticated valid, Invalid flows) with flow percentages and statuses.
+    3. **Per Organization**: Reporting mailbox providers with unique IPs, total volume, compliance %, and policy disposition breakdown.
+    4. **Per Host**: Sending hosts and IPs with reverse DNS (PTR), country flags, autonomous system (ISP), volume, compliance %, and receiver policy.
+    5. **Detailed Stats**: Granular itemized log records with hostname, IP, reporting org, volume, DMARC/SPF/DKIM compliance, selectors, and dispositions.
+    6. **Geolocation Report**: Global geographic coordinates, country, city, sending IP counts, message volume, and pass rate.
+    7. **Per Country**: Comprehensive country-level breakdown with flags, ISO codes, volume, unique IPs, compliance %, and threat volume.
+  * **Dynamic Active Filtering Preservation**: Faithfully captures active domain scope, time presets, custom date windows, search queries, and category filters.
+  * **Corporate Executive Light Styling**: Vector landscape PDFs with Sentinel logo, KPI cards, zebra-striped tables, and status pill badges; Excel workbooks with frozen headers, auto-fit column widths, thin borders, and native number/percentage cell formatting.
 * **White-Label Branded Template System**:
   * Define and manage multiple report templates (`templates/*.json`).
   * Custom brand colors (primary, secondary, accent, surface, border).
@@ -313,12 +325,19 @@ Replicates the depth, rigor, and visual clarity of **PowerDMARC's Domain Analyze
     * **French** (`fr`)
     * **Spanish** (`es`)
   * Persisted in user preferences and `localStorage`.
-* **Dynamic Theme Customization Engine**:
-  * **Sentinel Dark** (High-contrast obsidian and cyan cyber theme)
-  * **Nordic Frost** (Cool slate blue and arctic cyan)
-  * **Emerald Security** (Deep charcoal with emerald green accents)
-  * **Cyberpunk Neon** (Deep violet with neon magenta and cyan accents)
-  * **Light Mode** (Clean, high-legibility enterprise daylight palette)
+* **Admin Theme Studio & Full Color Customization Control Panel**:
+  * **Real-time Color Tuning**: Super Admins can adjust and fine-tune all theme color tokens (canvas background, card surface, hover state, borders, primary text, muted text, brand accent, chart grid, and chart tooltip styling).
+  * **Left Menu & Sidebar Styling Controls**: Dedicated color pickers for active menu text & icon colors, inactive menu text, hover state text, active tab pill background tint, section headers ("Monitored Scope", "Navigation"), sidebar background, and dividers.
+  * **Custom Theme Creation**: Create entirely new custom themes from scratch or bootstrap from curated templates (Cyber Dark, Executive Light, Nordic Frost, Emerald Sentinel, Neon Violet SOC, Obsidian & Gold, Crimson Threat Red).
+  * **Live Sandbox Preview**: Real-time simulated SOC dashboard preview inside the admin editor demonstrating Left Menu active/inactive/hover states, KPI metrics, threat alerts, and table rows before saving.
+  * **Database-Backed Persistence**: All custom and modified themes are stored in SQLite (`system_themes` table) with full audit logging (`THEME_CREATED`, `THEME_UPDATED`, `THEME_RESET`, `THEME_DELETED`).
+  * **Dynamic CSS Variable Injection**: Instant live application via CSS custom properties across all components without needing page refreshes or CSS rebuilds.
+  * **Built-in System Themes**:
+    * **Cyber Dark** (Sentinel SOC classic midnight & cyan)
+    * **Executive Light** (Crisp corporate slate & clean white)
+    * **Nordic Frost** (Cool ice-blue with arctic azure accents)
+    * **Emerald Sentinel** (High-trust sage & forest green compliance)
+  * **Factory Defaults Reset**: One-click restoration of factory palette settings for built-in themes.
 * **Accessible Component Architecture**:
   * Screen-reader friendly semantic HTML, ARIA attributes, and high-contrast color ratios.
 

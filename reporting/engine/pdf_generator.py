@@ -4,6 +4,13 @@ import base64
 from datetime import datetime
 from typing import Dict, Any
 from playwright.sync_api import sync_playwright
+try:
+    from engine.logo_resolver import get_logo_data_uri
+except ImportError:
+    try:
+        from reporting.engine.logo_resolver import get_logo_data_uri
+    except ImportError:
+        from logo_resolver import get_logo_data_uri
 
 class DmarcPdfGenerator:
     def __init__(self, template_config: Dict[str, Any]):
@@ -12,20 +19,8 @@ class DmarcPdfGenerator:
         self.lang = self.template.get("language", "en")
 
     def _get_logo_data_uri(self) -> str:
-        logo_rel = self.template.get("logo", "templates/assets/sentinel_logo.png")
-        if not logo_rel:
-            return ""
-        if logo_rel.startswith("data:image/") or logo_rel.startswith("http://") or logo_rel.startswith("https://"):
-            return logo_rel
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        logo_full = os.path.join(base_dir, logo_rel) if not os.path.isabs(logo_rel) else logo_rel
-        
-        if os.path.exists(logo_full):
-            with open(logo_full, "rb") as f:
-                encoded = base64.b64encode(f.read()).decode("utf-8")
-                mime = "image/svg+xml" if logo_full.endswith(".svg") else "image/png"
-                return f"data:{mime};base64,{encoded}"
-        return ""
+        logo_spec = self.template.get("logo")
+        return get_logo_data_uri(logo_spec, fallback=True)
 
     def generate_html(self, data: Dict[str, Any], domain: str = "all", date_str: str = "") -> str:
         summary = data["summary"]
@@ -40,7 +35,7 @@ class DmarcPdfGenerator:
         is_es = self.lang == "es"
         labels = {
             "title": self.template.get("title", "DMARC Executive Authentication & Security Report"),
-            "subtitle": self.template.get("subtitle", "PowerDMARC-Aligned Multi-View Domain Protection Audit"),
+            "subtitle": self.template.get("subtitle", "Multi-View Domain Protection Audit"),
             "exec_summary": "Resumen Ejecutivo de Seguridad" if is_es else "Executive Security Summary",
             "journey_title": "Ruta de Implementación y Cumplimiento DMARC" if is_es else "DMARC Enforcement Journey",
             "score_title": "Puntuación de Seguridad de Dominio" if is_es else "Domain Security Score",
@@ -110,7 +105,7 @@ class DmarcPdfGenerator:
     size: A4;
     margin: 18mm 15mm 18mm 15mm;
     @bottom-left {{
-      content: "{self.template.get('footer_text', 'DMARC Sentinel • PowerDMARC Compatible Reporting')}";
+      content: "{self.template.get('footer_text', 'DMARC Sentinel • Enterprise Reporting')}";
       font-size: 8pt;
       color: #64748b;
       font-family: sans-serif;
@@ -210,7 +205,7 @@ class DmarcPdfGenerator:
     page-break-after: avoid;
   }}
 
-  /* PowerDMARC Journey Stepper */
+  /* DMARC Journey Stepper */
   .journey-container {{
     display: flex;
     align-items: center;

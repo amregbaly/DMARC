@@ -58,7 +58,8 @@ export default function Sidebar({
     { id: 'reports', label: t('nav.reports', 'Reports'), icon: FileText },
     { id: 'records', label: t('nav.records', 'Log Explorer'), icon: Search },
     ...(canManageUsers ? [{ id: 'users', label: t('nav.users', 'User Access'), icon: Users }] : []),
-    ...(isAdmin ? [{ id: 'smtp', label: t('nav.smtp', 'Email / SMTP'), icon: Mail }] : [])
+    ...(isAdmin ? [{ id: 'smtp', label: t('nav.smtp', 'Email / SMTP'), icon: Mail }] : []),
+    ...(isAdmin ? [{ id: 'themes', label: t('nav.themes', 'Theme Studio'), icon: Palette }] : [])
   ];
 
   return (
@@ -75,12 +76,19 @@ export default function Sidebar({
       {/* Left Sidebar Panel */}
       <aside
         id="app-left-sidebar"
-        className={`fixed top-0 bottom-0 left-0 z-50 w-72 lg:w-64 xl:w-72 bg-slate-950/95 lg:bg-slate-950/80 backdrop-blur-2xl border-r border-slate-800/80 flex flex-col transition-transform duration-300 ease-in-out ${
+        style={{
+          backgroundColor: 'var(--sidebar-bg, #030712)',
+          borderColor: 'var(--sidebar-border, #1e293b)'
+        }}
+        className={`fixed top-0 bottom-0 left-0 z-50 w-72 lg:w-64 xl:w-72 backdrop-blur-2xl border-r flex flex-col transition-transform duration-300 ease-in-out ${
           mobileOpen ? 'translate-x-0 shadow-2xl shadow-cyan-950/50' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Sidebar Brand Header */}
-        <div className="h-16 px-5 border-b border-slate-800/80 flex items-center justify-between shrink-0">
+        <div
+          className="h-16 px-5 border-b flex items-center justify-between shrink-0"
+          style={{ borderColor: 'var(--sidebar-border, #1e293b)' }}
+        >
           <div
             className="flex items-center gap-3 cursor-pointer select-none"
             onClick={() => {
@@ -88,19 +96,32 @@ export default function Sidebar({
               if (onCloseMobile) onCloseMobile();
             }}
           >
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25 ring-1 ring-white/20 shrink-0">
-              <Shield className="w-5 h-5 text-white" />
+            <div
+              className="h-10 w-10 rounded-xl flex items-center justify-center shadow-lg ring-1 ring-white/20 shrink-0 text-white"
+              style={{ backgroundColor: 'var(--sidebar-active-text, #06b6d4)' }}
+            >
+              <Shield className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-base font-bold tracking-tight text-white">
-                  DMARC<span className="text-cyan-400">Sentinel</span>
+                <span className="text-base font-bold tracking-tight" style={{ color: 'var(--sidebar-text-hover, #ffffff)' }}>
+                  DMARC<span style={{ color: 'var(--sidebar-active-text, #06b6d4)' }}>Sentinel</span>
                 </span>
-                <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-md animate-pulse">
+                <span
+                  className="px-1.5 py-0.5 text-[9px] font-semibold border rounded-md animate-pulse"
+                  style={{
+                    color: 'var(--sidebar-active-text, #06b6d4)',
+                    borderColor: 'var(--sidebar-active-text, #06b6d4)',
+                    backgroundColor: 'rgba(6, 182, 212, 0.1)'
+                  }}
+                >
                   {t('nav.live', 'LIVE')}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-medium truncate max-w-[150px]">
+              <p
+                className="text-[10px] font-medium truncate max-w-[150px]"
+                style={{ color: 'var(--sidebar-text, #94a3b8)' }}
+              >
                 {t('nav.tagline', 'Enterprise Email Security')}
               </p>
             </div>
@@ -109,7 +130,8 @@ export default function Sidebar({
           {/* Close Button on Mobile Drawer */}
           <button
             onClick={onCloseMobile}
-            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition cursor-pointer"
+            className="lg:hidden p-1.5 rounded-lg transition cursor-pointer"
+            style={{ color: 'var(--sidebar-text, #94a3b8)' }}
             aria-label="Close menu"
           >
             <X className="w-5 h-5" />
@@ -118,20 +140,44 @@ export default function Sidebar({
 
         {/* Monitored Scope / Domain Filter */}
         {activeTab !== 'users' && (
-          <div className="px-4 py-3 border-b border-slate-800/60 bg-slate-900/30 shrink-0">
-            <div className="flex items-center justify-between mb-1.5 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+          <div
+            className="px-4 py-3 border-b shrink-0"
+            style={{
+              borderColor: 'var(--sidebar-border, #1e293b)',
+              backgroundColor: 'rgba(0, 0, 0, 0.15)'
+            }}
+          >
+            <div
+              className="flex items-center justify-between mb-1.5 text-[10px] font-semibold tracking-wider uppercase"
+              style={{ color: 'var(--sidebar-header-text, #64748b)' }}
+            >
               <span>{t('nav.monitoredDomain', 'Monitored Scope')}</span>
-              <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 text-[9px] font-mono">
+              <span
+                className="px-1.5 py-0.2 rounded text-[9px] font-mono border"
+                style={{
+                  backgroundColor: 'var(--color-slate-900, #0f172a)',
+                  borderColor: 'var(--sidebar-border, #1e293b)',
+                  color: 'var(--sidebar-text, #94a3b8)'
+                }}
+              >
                 {domains.length}
               </span>
             </div>
             <div className="relative flex items-center">
-              <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
+              <Filter
+                className="w-3.5 h-3.5 absolute left-2.5 pointer-events-none"
+                style={{ color: 'var(--sidebar-header-text, #64748b)' }}
+              />
               <select
                 id="sidebar-domain-filter"
                 value={selectedDomain}
                 onChange={(e) => onSelectDomain(e.target.value)}
-                className="w-full bg-slate-900/90 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 rounded-xl pl-8 pr-7 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all cursor-pointer truncate"
+                style={{
+                  backgroundColor: 'var(--color-slate-900, #0f172a)',
+                  borderColor: 'var(--sidebar-border, #1e293b)',
+                  color: 'var(--sidebar-text-hover, #f8fafc)'
+                }}
+                className="w-full border text-xs rounded-xl pl-8 pr-7 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all cursor-pointer truncate"
               >
                 <option value="all">
                   {isAdmin
@@ -150,7 +196,10 @@ export default function Sidebar({
 
         {/* Navigation List - Horizontal Item Rows on Left Side */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          <div className="px-3 pb-2 text-[10px] font-bold tracking-wider text-slate-500 uppercase">
+          <div
+            className="px-3 pb-2 text-[10px] font-bold tracking-wider uppercase"
+            style={{ color: 'var(--sidebar-header-text, #64748b)' }}
+          >
             {t('nav.navigation', 'Navigation')}
           </div>
 
@@ -166,19 +215,47 @@ export default function Sidebar({
                     onSelectTab(tab.id);
                     if (onCloseMobile) onCloseMobile();
                   }}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer group ${
+                  style={
                     isActive
-                      ? 'bg-gradient-to-r from-cyan-500/20 via-blue-500/10 to-transparent text-cyan-300 border border-cyan-500/35 shadow-md shadow-cyan-500/10'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/70 border border-transparent'
-                  }`}
+                      ? {
+                          color: 'var(--sidebar-active-text, #22d3ee)',
+                          backgroundColor: 'var(--sidebar-active-bg, rgba(6, 182, 212, 0.15))',
+                          borderColor: 'var(--sidebar-active-text, rgba(6, 182, 212, 0.35))',
+                          boxShadow: '0 4px 12px -2px rgba(6, 182, 212, 0.12)'
+                        }
+                      : {
+                          color: 'var(--sidebar-text, #94a3b8)',
+                          borderColor: 'transparent'
+                        }
+                  }
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.color = 'var(--sidebar-text-hover, #f8fafc)';
+                      e.currentTarget.style.backgroundColor = 'var(--color-slate-900, rgba(15, 23, 42, 0.6))';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.color = 'var(--sidebar-text, #94a3b8)';
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer group border"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                      className="p-1.5 rounded-lg transition-colors shrink-0"
+                      style={
                         isActive
-                          ? 'bg-cyan-500/25 text-cyan-300'
-                          : 'bg-slate-900/80 text-slate-400 group-hover:text-slate-200 group-hover:bg-slate-800'
-                      }`}
+                          ? {
+                              backgroundColor: 'var(--sidebar-active-bg, rgba(6, 182, 212, 0.20))',
+                              color: 'var(--sidebar-active-text, #22d3ee)'
+                            }
+                          : {
+                              backgroundColor: 'rgba(128, 128, 128, 0.1)',
+                              color: 'var(--sidebar-text, #94a3b8)'
+                            }
+                      }
                     >
                       <Icon className="w-4 h-4 shrink-0" />
                     </div>
@@ -186,7 +263,13 @@ export default function Sidebar({
                   </div>
 
                   {isActive && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.9)] shrink-0" />
+                    <div
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: 'var(--sidebar-active-text, #22d3ee)',
+                        boxShadow: '0 0 8px var(--sidebar-active-text, #22d3ee)'
+                      }}
+                    />
                   )}
                 </button>
               );
@@ -195,16 +278,27 @@ export default function Sidebar({
         </div>
 
         {/* Controls Section: Language & Refresh */}
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/60 space-y-2 shrink-0">
+        <div
+          className="p-3 border-t space-y-2 shrink-0"
+          style={{
+            borderColor: 'var(--sidebar-border, #1e293b)',
+            backgroundColor: 'rgba(0, 0, 0, 0.15)'
+          }}
+        >
           <div className="grid grid-cols-2 gap-1.5">
             {/* Language Switcher Pill */}
             <button
               id="sidebar-language-toggle-btn"
               onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
               title={language === 'en' ? t('nav.switchLanguage', 'Switch to Spanish') : t('nav.switchLanguage', 'Cambiar a Inglés')}
-              className="flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 transition cursor-pointer font-medium"
+              style={{
+                backgroundColor: 'var(--color-slate-900, #0f172a)',
+                borderColor: 'var(--sidebar-border, #1e293b)',
+                color: 'var(--sidebar-text, #94a3b8)'
+              }}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs rounded-xl border hover:opacity-90 transition cursor-pointer font-medium"
             >
-              <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <Globe className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--sidebar-active-text, #06b6d4)' }} />
               <span className="font-semibold text-[11px]">{language === 'en' ? '🇺🇸 EN' : '🇪🇸 ES'}</span>
             </button>
 
@@ -214,10 +308,16 @@ export default function Sidebar({
               onClick={onRefresh}
               disabled={isLoading}
               title={t('nav.refresh', 'Refresh Data')}
-              className="flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 transition cursor-pointer font-medium disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--color-slate-900, #0f172a)',
+                borderColor: 'var(--sidebar-border, #1e293b)',
+                color: 'var(--sidebar-text, #94a3b8)'
+              }}
+              className="flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs rounded-xl border hover:opacity-90 transition cursor-pointer font-medium disabled:opacity-50"
             >
               <RefreshCw
-                className={`w-3.5 h-3.5 text-cyan-400 shrink-0 ${isLoading ? 'animate-spin' : ''}`}
+                className={`w-3.5 h-3.5 shrink-0 ${isLoading ? 'animate-spin' : ''}`}
+                style={{ color: 'var(--sidebar-active-text, #06b6d4)' }}
               />
               <span className="text-[11px] font-semibold">{t('common.refresh', 'Refresh')}</span>
             </button>
@@ -229,7 +329,11 @@ export default function Sidebar({
               <button
                 id="sidebar-user-profile-button"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 transition cursor-pointer text-xs"
+                style={{
+                  backgroundColor: 'var(--color-slate-900, #0f172a)',
+                  borderColor: 'var(--sidebar-border, #1e293b)'
+                }}
+                className="w-full flex items-center justify-between p-2 rounded-xl border hover:opacity-95 transition cursor-pointer text-xs"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
@@ -244,10 +348,16 @@ export default function Sidebar({
                     {(currentUser.email || currentUser.username).substring(0, 2)}
                   </div>
                   <div className="text-left min-w-0 truncate">
-                    <span className="font-semibold text-slate-200 block leading-tight truncate">
+                    <span
+                      className="font-semibold block leading-tight truncate"
+                      style={{ color: 'var(--sidebar-text-hover, #ffffff)' }}
+                    >
                       {currentUser.username || currentUser.email}
                     </span>
-                    <span className="text-[10px] text-slate-400 block leading-tight capitalize truncate">
+                    <span
+                      className="text-[10px] block leading-tight capitalize truncate"
+                      style={{ color: 'var(--sidebar-text, #94a3b8)' }}
+                    >
                       {currentUser.role === 'admin'
                         ? t('nav.roleAdmin', 'Super Admin')
                         : currentUser.role === 'manager'
@@ -256,7 +366,10 @@ export default function Sidebar({
                     </span>
                   </div>
                 </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}
+                  style={{ color: 'var(--sidebar-text, #94a3b8)' }}
+                />
               </button>
 
               {/* User Dropdown Menu */}
@@ -331,6 +444,21 @@ export default function Sidebar({
                       >
                         <Users className="w-3.5 h-3.5 text-cyan-400" />
                         <span>{t('nav.manageUsers', 'Manage Users & Access')}</span>
+                      </button>
+                    )}
+
+                    {/* Theme Studio shortcut (if admin) */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onSelectTab('themes');
+                          if (onCloseMobile) onCloseMobile();
+                        }}
+                        className="w-full text-left px-3.5 py-2 text-slate-300 hover:text-cyan-300 hover:bg-slate-800/80 flex items-center gap-2 transition cursor-pointer"
+                      >
+                        <Palette className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{t('nav.themes', 'Theme Studio')}</span>
                       </button>
                     )}
 

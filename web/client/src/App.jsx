@@ -13,6 +13,7 @@ import UserManagement from './components/UserManagement';
 import ReportsDashboard from './components/ReportsDashboard';
 import AlertsDashboard from './components/AlertsDashboard';
 import EmailSettings from './components/EmailSettings';
+import ThemeManager from './components/ThemeManager';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import UserProfileModal from './components/UserProfileModal';
@@ -119,13 +120,13 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
 
   // Fetch metrics whenever selectedDomain changes
   useEffect(() => {
-    if (currentUser && !['users', 'smtp', 'alerts'].includes(activeTab)) {
+    if (currentUser && !['users', 'smtp', 'alerts', 'themes'].includes(activeTab)) {
       loadDashboardData();
     }
   }, [selectedDomain, currentUser]);
 
   async function loadDashboardData() {
-    if (!currentUser || ['users', 'smtp', 'alerts'].includes(activeTab)) return;
+    if (!currentUser || ['users', 'smtp', 'alerts', 'themes'].includes(activeTab)) return;
     setLoading(true);
     setError(null);
     try {
@@ -219,7 +220,7 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
         )}
 
         {/* Global KPI Cards (shown on log analytics tabs, hidden on health, reports & user management) */}
-        {activeTab !== 'health' && activeTab !== 'users' && activeTab !== 'reports' && (
+        {activeTab !== 'health' && activeTab !== 'users' && activeTab !== 'reports' && activeTab !== 'themes' && (
           <section aria-label="Executive Overview Metrics">
             <KPIGrid overview={overview} />
           </section>
@@ -242,6 +243,10 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
           />
         ) : activeTab === 'smtp' ? (
           <EmailSettings
+            currentUser={currentUser}
+          />
+        ) : activeTab === 'themes' ? (
+          <ThemeManager
             currentUser={currentUser}
           />
         ) : activeTab === 'reports' ? (

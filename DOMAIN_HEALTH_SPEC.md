@@ -1,6 +1,6 @@
 # Domain Health & Security Analyzer Specification
 
-**Reference Tool:** [PowerDMARC Domain Analyzer](https://powerdmarc.com/domain-analyzer/?domain=voxera.net)  
+**Feature:** Live Domain DNS & Security Protocol Analyzer  
 **Target Application:** DMARC Sentinel (Enterprise Security Dashboard)  
 **Document File:** `DOMAIN_HEALTH_SPEC.md`  
 **Status:** Ready to Resume & Implement
@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary & Objective
 
-The objective is to implement a new **"Domain Health"** tab in DMARC Sentinel that replicates the functionality, depth, and visual clarity of PowerDMARC's Domain Analyzer for any domain (tested and benchmarked against `voxera.net`).
+The objective is to implement a new **"Domain Health"** tab in DMARC Sentinel that provides comprehensive, rigorous, and visually clear Domain Analysis for any domain (tested and benchmarked against `voxera.net`).
 
 The feature provides:
 1. **Live Domain DNS Audit** across all email authentication & transport protocols (DMARC, SPF, DKIM, BIMI, MTA-STS, TLS-RPT, DNSSEC, MX, NS, A).
@@ -26,11 +26,11 @@ The feature provides:
 
 ---
 
-## 2. Benchmark Findings: `voxera.net` on PowerDMARC
+## 2. Benchmark Findings: `voxera.net`
 
 During browser and live DNS analysis of `voxera.net`, the following ground-truth metrics were verified:
 
-| Metric / Check | Value / Finding | PowerDMARC Interpretation |
+| Metric / Check | Value / Finding | Security Assessment |
 | :--- | :--- | :--- |
 | **Security Score** | **75% Fair** (Grade C) | Baseline protocols present, but missing transport encryption & DKIM selector verification. |
 | **DMARC Record** | `v=DMARC1;p=reject;sp=reject;rua=mailto:dmarc@voxera.net;ruf=mailto:dmarc@voxera.net;fo=1;` | **Valid** (Policy: `Reject`, Subdomain: `Reject`, Reporting: `Enabled`, Issues: `0`). |
@@ -144,7 +144,7 @@ To resume and complete this task, follow these steps:
      ```
 
 3. **Create `web/client/src/components/DomainHealth.jsx`**:
-   - Implement the complete UI matching PowerDMARC's cards, tables, score hero, observations, and deep-dive accordions.
+   - Implement the complete UI with cards, tables, score hero, observations, and deep-dive accordions.
 
 4. **Update `web/client/src/components/Navbar.jsx`**:
    - Add `{ id: 'health', label: 'Domain Health' }` to the navigation tabs list.

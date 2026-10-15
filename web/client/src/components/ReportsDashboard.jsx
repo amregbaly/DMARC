@@ -402,7 +402,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
         {/* Sub Navigation Tabs */}
         <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t border-slate-800/80">
           {[
-            { id: 'aggregate', label: t('reports.aggregateTab', 'Aggregate Views (PowerDMARC)'), icon: Layers },
+            { id: 'aggregate', label: t('reports.aggregateTab', 'Aggregate Views'), icon: Layers },
             { id: 'generate', label: t('reports.generateTab', 'Generate Report'), icon: FileText },
             { id: 'templates', label: t('reports.brandingTab', 'Branding & Templates'), icon: Palette },
             { id: 'history', label: t('reports.historyTab', 'Report History'), icon: Clock },
@@ -434,7 +434,7 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
       </div>
 
       {/* ======================================================== */}
-      {/* 0. POWERDMARC MULTI-VIEW AGGREGATE REPORTS TAB */}
+      {/* 0. MULTI-VIEW AGGREGATE REPORTS TAB */}
       {/* ======================================================== */}
       {activeSubTab === 'aggregate' && (
         <AggregateReportsView

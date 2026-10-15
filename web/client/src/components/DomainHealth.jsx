@@ -565,7 +565,7 @@ export default function DomainHealth({ selectedDomain = '', onSelectDomain, doma
 
       {data && (
         <>
-          {/* 2. Executive Score Hero Banner (PowerDMARC style) */}
+          {/* 2. Executive Score Hero Banner */}
           <section className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden">
             {/* Background glowing ambient light */}
             <div className={`absolute -right-20 -top-20 w-72 h-72 rounded-full blur-3xl opacity-20 pointer-events-none ${theme.bg}`} />

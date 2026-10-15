@@ -18,6 +18,7 @@ import {
   Info
 } from 'lucide-react';
 import { useTheme } from '../theme/ThemeContext';
+import { getClientCountryCoordinates } from '../services/countryCoords';
 
 // High-Definition Tile Providers: 100% Free & No API Key Required
 const TILE_LAYERS = {
@@ -241,7 +242,18 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
     const bounds = L.latLngBounds();
 
     geoPoints.forEach((pt) => {
-      if (typeof pt.lat !== 'number' || typeof pt.lng !== 'number') return;
+      let lat = typeof pt.lat === 'number' ? pt.lat : null;
+      let lng = typeof pt.lng === 'number' ? pt.lng : null;
+
+      if ((lat === null || lng === null) && pt.country) {
+        const fallback = getClientCountryCoordinates(pt.country);
+        if (fallback) {
+          lat = fallback[0];
+          lng = fallback[1];
+        }
+      }
+
+      if (typeof lat !== 'number' || typeof lng !== 'number') return;
 
       const isCompliant = Boolean(pt.compliant);
       const ringColor = isCompliant ? '#10b981' : '#f43f5e';
@@ -265,7 +277,7 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
         popupAnchor: [0, -12]
       });
 
-      const marker = L.marker([pt.lat, pt.lng], { icon });
+      const marker = L.marker([lat, lng], { icon });
 
       // Rich dark popup
       const flag = getCountryFlag ? getCountryFlag(pt.country) : '';
@@ -309,7 +321,7 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
       });
 
       group.addLayer(marker);
-      bounds.extend([pt.lat, pt.lng]);
+      bounds.extend([lat, lng]);
     });
 
     // Auto-frame around detected nodes if any exist
@@ -330,8 +342,17 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
     if (geoPoints.length > 0) {
       const bounds = L.latLngBounds();
       geoPoints.forEach((pt) => {
-        if (typeof pt.lat === 'number' && typeof pt.lng === 'number') {
-          bounds.extend([pt.lat, pt.lng]);
+        let lat = typeof pt.lat === 'number' ? pt.lat : null;
+        let lng = typeof pt.lng === 'number' ? pt.lng : null;
+        if ((lat === null || lng === null) && pt.country) {
+          const fallback = getClientCountryCoordinates(pt.country);
+          if (fallback) {
+            lat = fallback[0];
+            lng = fallback[1];
+          }
+        }
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          bounds.extend([lat, lng]);
         }
       });
       if (bounds.isValid()) {
@@ -513,7 +534,7 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
         </div>
       </div>
 
-      {/* Top 10 Countries Breakdown Cards (PowerDMARC Standard) */}
+      {/* Top 10 Countries Breakdown Cards */}
       <div className="space-y-3">
         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
           <MapPin className="w-3.5 h-3.5 text-cyan-400" />
@@ -640,8 +661,27 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
                   </td>
                 </tr>
               ) : (
-                filteredPoints.map((pt, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/30 transition">
+                filteredPoints.map((pt, idx) => {
+                  let lat = typeof pt.lat === 'number' ? pt.lat : null;
+                  let lng = typeof pt.lng === 'number' ? pt.lng : null;
+                  if ((lat === null || lng === null) && pt.country) {
+                    const fallback = getClientCountryCoordinates(pt.country);
+                    if (fallback) {
+                      lat = fallback[0];
+                      lng = fallback[1];
+                    }
+                  }
+                  return (
+                  <tr 
+                    key={idx} 
+                    onClick={() => {
+                      if (typeof lat === 'number' && typeof lng === 'number' && mapInstanceRef.current) {
+                        mapInstanceRef.current.flyTo([lat, lng], 6);
+                        setSelectedPoint(pt);
+                      }
+                    }}
+                    className="hover:bg-slate-800/40 cursor-pointer transition"
+                  >
                     <td className="py-3 px-4 flex items-center gap-2 font-bold text-white">
                       <span className="text-base">{getCountryFlag ? getCountryFlag(pt.country) : ''}</span>
                       <span>{pt.country}</span>
@@ -667,7 +707,8 @@ export default function GeoLocationMap({ geoPoints = [], getCountryFlag, t }) {
                       )}
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -66,7 +66,7 @@ export default function TopBar({
   const CurrentIcon = currentTab.icon;
 
   function cycleTheme() {
-    const order = ['dark', 'light', 'nordic', 'emerald'];
+    const order = ['light', 'dark', 'nordic', 'emerald'];
     const next = order[(order.indexOf(theme) + 1) % order.length];
     setTheme(next, true);
   }

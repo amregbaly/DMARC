@@ -267,6 +267,17 @@ export function getDashboardsExportUrl() {
   return `${BASE_URL}/reports/dashboards-export?token=${encodeURIComponent(token || '')}`;
 }
 
+export async function exportAggregateTab(payload) {
+  const result = await authFetch(`${BASE_URL}/reports/export-tab`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  if (result.filename) {
+    await downloadReportFile(result.filename);
+  }
+  return result;
+}
+
 export async function downloadReportFile(filename) {
   const token = getToken();
   const headers = {};
@@ -444,6 +455,55 @@ export async function sendReportByEmail({
       logo_url,
       report_name
     })
+  });
+}
+
+// ==========================================
+// Theme Studio & Management API
+// ==========================================
+
+export async function fetchThemes() {
+  const token = getToken();
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${BASE_URL}/themes`, { headers });
+  if (!res.ok) {
+    throw new Error('Failed to fetch themes');
+  }
+  return res.json();
+}
+
+export async function fetchThemeById(id) {
+  const res = await fetch(`${BASE_URL}/themes/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch theme');
+  }
+  return res.json();
+}
+
+export async function createTheme(themeData) {
+  return authFetch(`${BASE_URL}/admin/themes`, {
+    method: 'POST',
+    body: JSON.stringify(themeData)
+  });
+}
+
+export async function updateTheme(id, themeData) {
+  return authFetch(`${BASE_URL}/admin/themes/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(themeData)
+  });
+}
+
+export async function deleteTheme(id) {
+  return authFetch(`${BASE_URL}/admin/themes/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function resetTheme(id) {
+  return authFetch(`${BASE_URL}/admin/themes/${encodeURIComponent(id)}/reset`, {
+    method: 'POST'
   });
 }
 

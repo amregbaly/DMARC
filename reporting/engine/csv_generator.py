@@ -20,6 +20,8 @@ class DmarcCsvGenerator:
             writer.writerow(["# Domain", domain.upper()])
             writer.writerow(["# Client / Organization", self.template.get("prepared_for", "Enterprise Security Team")])
             writer.writerow(["# Author / Logon", self.template.get("prepared_by", "DMARC Sentinel")])
+            if self.template.get("logo"):
+                writer.writerow(["# Organization Logo", self.template.get("logo")])
             writer.writerow(["# Date", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")])
             writer.writerow(["# Total Processed", summary["total_messages"]])
             writer.writerow(["# DMARC Pass Rate", f"{summary['pass_percentage']}%"])

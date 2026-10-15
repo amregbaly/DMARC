@@ -1,12 +1,12 @@
 <div style="margin-bottom: 24px;">
-  <div style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">
+  <div style="display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a;">
     📬 Daily Incident Digest
   </div>
-  <h2 style="font-size: 22px; font-weight: 700; color: #f8fafc; margin: 12px 0 4px 0;">
+  <h2 style="font-size: 22px; font-weight: 700; color: #0f172a; margin: 12px 0 4px 0;">
     DMARC Security Summary for {{userEmail}}
   </h2>
-  <div style="font-size: 13px; color: #94a3b8;">
-    Total Incidents Captured in Last 24 Hours: <strong style="color: #f8fafc;">{{incidentCount}}</strong>
+  <div style="font-size: 13px; color: #64748b;">
+    Total Incidents Captured in Last 24 Hours: <strong style="color: #0f172a;">{{incidentCount}}</strong>
   </div>
 </div>
 
@@ -26,16 +26,16 @@
       <tr>
         <td>
           <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase;
-            {{#isCritical}}background: rgba(239, 68, 68, 0.2); color: #f87171;{{/isCritical}}
-            {{#isWarning}}background: rgba(245, 158, 11, 0.2); color: #fbbf24;{{/isWarning}}
-            {{#isInfo}}background: rgba(56, 189, 248, 0.2); color: #38bdf8;{{/isInfo}}">
+            {{#isCritical}}background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;{{/isCritical}}
+            {{#isWarning}}background: #fffbeb; color: #b45309; border: 1px solid #fde68a;{{/isWarning}}
+            {{#isInfo}}background: #f0f9ff; color: #0284c7; border: 1px solid #bae6fd;{{/isInfo}}">
             {{severity}}
           </span>
         </td>
-        <td><strong>{{ruleName}}</strong></td>
+        <td><strong style="color: #0f172a;">{{ruleName}}</strong></td>
         <td>{{conditionLabel}}</td>
-        <td><strong style="color: #f87171;">{{currentValueFormatted}}</strong> (thresh: {{thresholdFormatted}})</td>
-        <td style="color: #94a3b8;">{{timeFormatted}}</td>
+        <td><strong style="color: #dc2626;">{{currentValueFormatted}}</strong> <span style="color: #64748b;">(thresh: {{thresholdFormatted}})</span></td>
+        <td style="color: #64748b;">{{timeFormatted}}</td>
       </tr>
       {{/incidents}}
     </tbody>

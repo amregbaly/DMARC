@@ -34,6 +34,7 @@ import {
   formatReportEmailData,
   executeReportGeneration
 } from './workers/reportScheduler.js';
+import { resolveCoordinates } from './services/countryCoords.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -197,7 +198,8 @@ app.use((req, res, next) => {
   })(req, res, next);
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Rate Limiting Middlewares
 const generalLimiter = rateLimit({
@@ -337,7 +339,7 @@ app.post('/api/auth/login', async (req, res) => {
         organization_name: user.organization_name || '',
         logo_url: user.logo_url || '',
         language: user.language || 'en',
-        theme: user.theme || 'dark',
+        theme: user.theme || 'light',
         domains: user.domains || []
       }
     });
@@ -371,7 +373,7 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
         organization_name: updated.organization_name || '',
         logo_url: updated.logo_url || '',
         language: updated.language || 'en',
-        theme: updated.theme || 'dark',
+        theme: updated.theme || 'light',
         domains: updated.domains || []
       }
     });
@@ -533,7 +535,7 @@ app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async
       organization_name,
       logo_url,
       language: language || 'en',
-      theme: req.body.theme || 'dark',
+      theme: req.body.theme || 'light',
       parentId,
       domains: finalDomains
     });
@@ -546,7 +548,7 @@ app.post('/api/users', authenticateToken, requireRole('admin', 'manager'), async
       organization_name: newUser.organization_name || '',
       logo_url: newUser.logo_url || '',
       language: newUser.language || 'en',
-      theme: newUser.theme || 'dark',
+      theme: newUser.theme || 'light',
       parent_id: req.user.role === 'admin' ? newUser.parent_id : undefined,
       is_active: newUser.is_active,
       created_at: newUser.created_at,
@@ -624,7 +626,7 @@ app.put('/api/users/:id', authenticateToken, requireRole('admin', 'manager'), as
       organization_name: updated.organization_name || '',
       logo_url: updated.logo_url || '',
       language: updated.language || 'en',
-      theme: updated.theme || 'dark',
+      theme: updated.theme || 'light',
       parent_id: req.user.role === 'admin' ? updated.parent_id : undefined,
       is_active: updated.is_active,
       updated_at: updated.updated_at,
@@ -2155,7 +2157,7 @@ app.get('/api/domain-health', authenticateToken, enforceDomainAccess, async (req
 // REPORT GENERATOR & EXPORT ROUTES
 // ==========================================
 
-// PowerDMARC Multi-View Aggregate Analytics Endpoint (Per Source, Per Result, Per Org, Per Host, Geo Threats)
+// Multi-View Aggregate Analytics Endpoint (Per Source, Per Result, Per Org, Per Host, Geo Threats)
 app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, async (req, res) => {
   try {
     const filterQuery = buildFilterQuery(req.query, req.allowedDomains);
@@ -2361,7 +2363,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
     const nonCompliant = Math.max(0, failedVolume - threatVolume);
     const complianceRate = totalVolume > 0 ? Number(((passedVolume / totalVolume) * 100).toFixed(1)) : 100.0;
 
-    // Timeline series for Executive / New Version view
+    // Timeline series for Executive Overview
     const timeline = (aggs.timeline?.buckets || []).map(b => {
       const vol = b.total_vol?.value || 0;
       const pass = b.passed_vol?.vol?.value || 0;
@@ -2410,7 +2412,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
         };
       });
 
-      // Category tag matching PowerDMARC:
+      // Source Category classification tag:
       // "DMARC compatible sources" | "Forwarded" | "Failed"
       let categoryTag = 'Failed';
       if (pass === vol && vol > 0) {
@@ -2511,11 +2513,12 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
     // Detailed Hits for Itemized Stats table
     const detailedHits = (data.hits?.hits || []).map(h => {
       const src = h._source || {};
+      const rawCountry = src.source_country || 'Unknown';
       return {
         id: h._id,
         hostname: src.source_reverse_dns || 'No PTR Record',
         ip: src.source_ip_address || '',
-        country: src.source_country || 'US',
+        country: rawCountry,
         org: src.org_name || 'Unknown Org',
         volume: src.message_count || 1,
         compliant: src.passed_dmarc === true,
@@ -2524,43 +2527,26 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
         dkimSelector: (src.dkim_results && src.dkim_results[0]?.selector) || 'default',
         spfDomain: (src.spf_results && src.spf_results[0]?.domain) || src.header_from || '',
         disposition: src.disposition || 'none',
-        date: src.date_begin || src.date_range?.[0] || ''
+        date: src.date_begin || src.date_range?.[0] || '',
+        location: src.source_geoip?.location || src.location || null
       };
     });
 
     // Geolocation points for interactive map
-    const COUNTRY_COORDS = {
-      US: [37.0902, -95.7129],
-      FI: [61.9241, 25.7482],
-      DE: [51.1657, 10.4515],
-      GB: [55.3781, -3.4360],
-      FR: [46.2276, 2.2137],
-      CA: [56.1304, -106.3468],
-      AU: [-25.2744, 133.7751],
-      NL: [52.1326, 5.2913],
-      IE: [53.1424, -7.6921],
-      JP: [36.2048, 138.2529],
-      CN: [35.8617, 104.1954],
-      IN: [20.5937, 78.9629],
-      BR: [-14.2350, -51.9253],
-      RU: [61.5240, 105.3188],
-      SG: [1.3521, 103.8198]
-    };
-
     const geoPoints = detailedHits.map(item => {
-      const coords = COUNTRY_COORDS[item.country] || [20.0, 0.0];
+      const coords = resolveCoordinates(item.country, item.location, true);
       return {
         ip: item.ip,
         hostname: item.hostname,
         country: item.country,
-        lat: coords[0] + (Math.random() - 0.5) * 2, // minor jitter to spread IP markers
-        lng: coords[1] + (Math.random() - 0.5) * 2,
+        lat: coords ? coords.lat : null,
+        lng: coords ? coords.lng : null,
         volume: item.volume,
         compliant: item.compliant
       };
     });
 
-    // PowerDMARC 3-Group Results Alignment breakdown:
+    // 3-Group Results Alignment breakdown:
     const fullyAlignedVol = aggs.fully_aligned?.vol?.value || 0;
     const spfOnlyVol = aggs.spf_aligned_only?.vol?.value || 0;
     const dkimOnlyVol = aggs.dkim_aligned_only?.vol?.value || 0;
@@ -2746,9 +2732,9 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
       return res.status(403).json({ error: `Access denied to domain ${domain}` });
     }
 
-    const targetOrg = (organization_name !== undefined ? organization_name : (req.user.organization_name || '')).trim();
-    const targetUser = (user_logon !== undefined ? user_logon : (req.user.username || '')).trim();
-    const targetLogo = (logo_url !== undefined ? logo_url : (req.user.logo_url || '')).trim();
+    const targetOrg = (organization_name || req.user.organization_name || '').trim();
+    const targetUser = (user_logon || req.user.username || '').trim();
+    const targetLogo = (logo_url || req.user.logo_url || '').trim();
 
     const scriptPath = path.resolve(__dirname, '../../reporting/report_service.py');
     const safeFormats = Array.isArray(formats) ? formats.filter(f => ['pdf', 'xlsx', 'csv'].includes(f)) : ['pdf'];
@@ -2831,6 +2817,103 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
   } catch (err) {
     console.error('Generate report endpoint error:', err);
     res.status(500).json({ error: 'Failed to process report request.' });
+  }
+});
+
+// 5.1 Export Any Aggregate Tab Data to PDF or Excel
+app.post('/api/reports/export-tab', authenticateToken, enforceDomainAccess, async (req, res) => {
+  let tmpFilePath = null;
+  try {
+    const {
+      tab_id = 'aggregate_view',
+      tab_title = 'Aggregate View Analytics',
+      format = 'xlsx',
+      domain = 'all',
+      time_window = 'Last 30 Days',
+      filters = {},
+      summary = {},
+      stats = [],
+      columns = [],
+      rows = [],
+      extra = {},
+      language = 'en'
+    } = req.body;
+
+    const safeFormat = (format || 'xlsx').toLowerCase().trim();
+    if (!['pdf', 'xlsx'].includes(safeFormat)) {
+      return res.status(400).json({ error: 'Invalid export format. Only pdf and xlsx are supported.' });
+    }
+
+    // Domain security check for non-admin
+    if (domain !== 'all' && req.user.role !== 'admin' && Array.isArray(req.user.domains) && !req.user.domains.includes(domain)) {
+      return res.status(403).json({ error: `Access denied to domain ${domain}` });
+    }
+
+    const payload = {
+      tab_id: String(tab_id),
+      tab_title: String(tab_title),
+      format: safeFormat,
+      domain: String(domain),
+      time_window: String(time_window),
+      filters: filters || {},
+      summary: summary || {},
+      stats: Array.isArray(stats) ? stats : [],
+      columns: Array.isArray(columns) ? columns : [],
+      rows: Array.isArray(rows) ? rows : [],
+      extra: extra || {},
+      client_org: (req.body.client_org || req.user.organization_name || 'Enterprise Security Team').trim(),
+      user_logon: (req.body.user_logon || req.user.username || 'System Administrator').trim(),
+      logo_url: (req.body.logo_url || req.user.logo_url || '').trim(),
+      language: (language || req.user.language || 'en').trim()
+    };
+
+    const tmpId = crypto.randomUUID();
+    tmpFilePath = path.join('/tmp', `tab_export_${tmpId}.json`);
+    await fs.promises.writeFile(tmpFilePath, JSON.stringify(payload), 'utf8');
+
+    const scriptPath = path.resolve(__dirname, '../../reporting/engine/tab_exporter.py');
+    const args = [
+      scriptPath,
+      '--input', tmpFilePath,
+      '--format', safeFormat,
+      '--output-dir', REPORTS_OUTPUT_DIR
+    ];
+
+    execFile(getPythonBinary(), args, { timeout: 60000, env: process.env }, async (error, stdout, stderr) => {
+      // Clean up tmp file
+      if (tmpFilePath && fs.existsSync(tmpFilePath)) {
+        try { await fs.promises.unlink(tmpFilePath); } catch (e) {}
+      }
+
+      if (error) {
+        console.error('Tab exporter process error:', error, stderr);
+        return res.status(500).json({ error: 'Tab export rendering failed.' });
+      }
+
+      try {
+        const result = JSON.parse(stdout.trim());
+        if (result.status !== 'success') {
+          return res.status(500).json({ error: result.message || 'Export error from rendering engine' });
+        }
+
+        res.json({
+          status: 'success',
+          format: result.format,
+          filename: result.filename,
+          downloadUrl: `/api/reports/download/${encodeURIComponent(result.filename)}`,
+          size_bytes: result.size_bytes
+        });
+      } catch (parseErr) {
+        console.error('Failed to parse tab exporter output:', parseErr, stdout);
+        res.status(500).json({ error: 'Failed to parse export output result.' });
+      }
+    });
+  } catch (err) {
+    if (tmpFilePath && fs.existsSync(tmpFilePath)) {
+      try { await fs.promises.unlink(tmpFilePath); } catch (e) {}
+    }
+    console.error('Export tab endpoint error:', err);
+    res.status(500).json({ error: 'Server error processing tab export.' });
   }
 });
 
@@ -3228,6 +3311,133 @@ app.post('/api/admin/email-queue/:id/retry', authenticateToken, requireRole('adm
 });
 
 // ==========================================
+// THEME STUDIO & DYNAMIC PALETTES API
+// ==========================================
+
+// 1. Get all available themes (public/authenticated)
+app.get('/api/themes', async (req, res) => {
+  try {
+    const themes = db.getAllThemes();
+    res.json(themes);
+  } catch (err) {
+    console.error('Error fetching themes:', err);
+    res.status(500).json({ error: 'Failed to fetch themes' });
+  }
+});
+
+// 2. Get single theme by ID
+app.get('/api/themes/:id', async (req, res) => {
+  try {
+    const theme = db.getThemeById(req.params.id);
+    if (!theme) return res.status(404).json({ error: 'Theme not found' });
+    res.json(theme);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch theme' });
+  }
+});
+
+// 3. Create a new custom theme (Admin only)
+app.post('/api/admin/themes', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id, name, desc, category, badge, colors } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Theme name is required' });
+    }
+
+    const created = db.createTheme({ id, name, desc, category, badge, colors });
+    db.addAuditLog({
+      userId: req.user.id,
+      username: req.user.username,
+      action: 'THEME_CREATED',
+      details: { themeId: created.id, name: created.name, category: created.category },
+      ipAddress: req.ip
+    });
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Theme created successfully',
+      theme: created
+    });
+  } catch (err) {
+    console.error('Error creating theme:', err);
+    res.status(400).json({ error: err.message || 'Failed to create theme' });
+  }
+});
+
+// 4. Update an existing theme colors & metadata (Admin only)
+app.put('/api/admin/themes/:id', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { name, desc, category, badge, colors } = req.body;
+    const updated = db.updateTheme(req.params.id, { name, desc, category, badge, colors });
+
+    db.addAuditLog({
+      userId: req.user.id,
+      username: req.user.username,
+      action: 'THEME_UPDATED',
+      details: { themeId: updated.id, name: updated.name },
+      ipAddress: req.ip
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Theme updated successfully',
+      theme: updated
+    });
+  } catch (err) {
+    console.error('Error updating theme:', err);
+    res.status(400).json({ error: err.message || 'Failed to update theme' });
+  }
+});
+
+// 5. Delete a custom theme (Admin only, non-default only)
+app.delete('/api/admin/themes/:id', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const result = db.deleteTheme(req.params.id);
+
+    db.addAuditLog({
+      userId: req.user.id,
+      username: req.user.username,
+      action: 'THEME_DELETED',
+      details: { themeId: req.params.id },
+      ipAddress: req.ip
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Theme deleted successfully',
+      id: result.id
+    });
+  } catch (err) {
+    console.error('Error deleting theme:', err);
+    res.status(400).json({ error: err.message || 'Failed to delete theme' });
+  }
+});
+
+// 6. Reset built-in theme to factory default palette (Admin only)
+app.post('/api/admin/themes/:id/reset', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const reset = db.resetDefaultTheme(req.params.id);
+
+    db.addAuditLog({
+      userId: req.user.id,
+      username: req.user.username,
+      action: 'THEME_RESET',
+      details: { themeId: reset.id, name: reset.name },
+      ipAddress: req.ip
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Theme reset to factory defaults',
+      theme: reset
+    });
+  } catch (err) {
+    console.error('Error resetting theme:', err);
+    res.status(400).json({ error: err.message || 'Failed to reset theme' });
+  }
+});
+
+// ==========================================
 // FEATURE 2: Alert Rules & Incidents
 // ==========================================
 
@@ -3617,8 +3827,8 @@ app.get('/api/reports/unsubscribe/:token', async (req, res) => {
       <meta charset="utf-8">
       <title>DMARC Sentinel - Notification Preferences</title>
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b1120; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { max-width: 480px; width: 90%; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 36px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #0f172a; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { max-width: 480px; width: 90%; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 36px; text-align: center; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06); }
         .btn { display: inline-block; background: #0284c7; color: #fff; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; margin-top: 24px; }
       </style>
     </head>
@@ -3634,7 +3844,7 @@ app.get('/api/reports/unsubscribe/:token', async (req, res) => {
     return res.status(400).send(baseHtml(`
       <div style="font-size: 40px; margin-bottom: 16px;">⚠️</div>
       <h2 style="margin: 0 0 12px 0;">Invalid or Expired Link</h2>
-      <p style="color: #94a3b8; font-size: 14px; line-height: 1.6;">The unsubscribe link is invalid or has expired. Please manage your notification settings from the Sentinel dashboard.</p>
+      <p style="color: #64748b; font-size: 14px; line-height: 1.6;">The unsubscribe link is invalid or has expired. Please manage your notification settings from the Sentinel dashboard.</p>
       <a href="/" class="btn">Go to Dashboard</a>
     `));
   }
@@ -3649,14 +3859,14 @@ app.get('/api/reports/unsubscribe/:token', async (req, res) => {
     res.send(baseHtml(`
       <div style="font-size: 40px; margin-bottom: 16px;">✅</div>
       <h2 style="margin: 0 0 12px 0;">Successfully Unsubscribed</h2>
-      <p style="color: #94a3b8; font-size: 14px; line-height: 1.6;">You have been unsubscribed from these automated DMARC notifications. You can re-enable alerts or report schedules at any time in the dashboard.</p>
+      <p style="color: #64748b; font-size: 14px; line-height: 1.6;">You have been unsubscribed from these automated DMARC notifications. You can re-enable alerts or report schedules at any time in the dashboard.</p>
       <a href="/" class="btn">Return to Dashboard</a>
     `));
   } catch (err) {
     res.status(500).send(baseHtml(`
       <div style="font-size: 40px; margin-bottom: 16px;">❌</div>
       <h2 style="margin: 0 0 12px 0;">Unsubscribe Error</h2>
-      <p style="color: #94a3b8; font-size: 14px; line-height: 1.6;">An error occurred while updating your preferences.</p>
+      <p style="color: #64748b; font-size: 14px; line-height: 1.6;">An error occurred while updating your preferences.</p>
       <a href="/" class="btn">Go to Dashboard</a>
     `));
   }

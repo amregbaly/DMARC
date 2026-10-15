@@ -119,7 +119,7 @@ export function authenticateToken(req, res, next) {
     organization_name: user.organization_name || '',
     logo_url: user.logo_url || '',
     language: user.language || 'en',
-    theme: user.theme || 'dark',
+    theme: user.theme || 'light',
     domains: user.domains || []
   };
 

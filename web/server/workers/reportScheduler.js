@@ -235,12 +235,17 @@ export async function runReportSchedule(schedule) {
   console.log(`[ReportScheduler] Running schedule "${schedule.name}" (${schedule.id}) for domain "${schedule.domain}" (${dateFrom} to ${dateTo})`);
 
   try {
+    const owner = schedule.user_id ? db.getUserById(schedule.user_id) : null;
     const result = await executeReportGeneration({
       domain: schedule.domain,
       templateId: schedule.template_id,
       formats: schedule.formats,
       dateFrom,
-      dateTo
+      dateTo,
+      clientOrg: owner?.organization_name || '',
+      userLogon: owner?.username || '',
+      logo: owner?.logo_url || '',
+      language: owner?.language || 'en'
     });
 
     const reportId = crypto.randomUUID();

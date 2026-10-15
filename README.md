@@ -20,7 +20,7 @@ For complete and detailed technical documentation, please consult the dedicated 
 | **[🔌 REST API Reference](docs/API_REFERENCE.md)** | Complete developer guide with endpoints, payloads, query parameters, and auth contracts. |
 | **[🚀 Deployment & Operations Guide](docs/DEPLOYMENT_GUIDE.md)** | Production setup on Linux with systemd, Nginx reverse proxy, SSL/TLS, and maintenance procedures. |
 | **[🛡️ Security Audit](SECURITY_AUDIT.md)** | Comprehensive penetration testing report, vulnerability assessments, and mitigations. |
-| **[🩺 Domain Health Spec](DOMAIN_HEALTH_SPEC.md)** | Deep-dive specification for the live DNS protocol analyzer (PowerDMARC parity). |
+| **[🩺 Domain Health Spec](DOMAIN_HEALTH_SPEC.md)** | Deep-dive specification for the live DNS protocol analyzer. |
 | **[✉️ Email Alerting Module](EMAIL_ALERTING_MODULE.md)** | Technical specification for the asynchronous SMTP queue and alerting engine. |
 | **[📊 Reporting Solution Spec](REPORTING_SOLUTION.md)** | Architectural specification for the branded multi-sheet Excel, PDF, and CSV reporting engine. |
 

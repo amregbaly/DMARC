@@ -295,7 +295,7 @@ Searchable raw DMARC aggregate records from OpenSearch with pagination.
 
 ---
 
-## 4. Live Domain Health Analyzer (PowerDMARC Parity)
+## 4. Live Domain Health Analyzer
 
 ### `GET /api/domain-health`
 Performs an asynchronous live DNS protocol audit for a specified domain across DMARC, SPF, DKIM, BIMI, MTA-STS, TLS-RPT, and DNSSEC.

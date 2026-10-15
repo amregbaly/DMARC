@@ -20,6 +20,9 @@ import {
   ExternalLink,
   Sliders,
   FileText,
+  FileSpreadsheet,
+  Download,
+  Loader2,
   Radio,
   Check,
   ChevronDown,
@@ -28,7 +31,7 @@ import {
   Sparkles,
   Calendar
 } from 'lucide-react';
-import { fetchAggregateViews } from '../services/api';
+import { fetchAggregateViews, exportAggregateTab } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 import GeoLocationMap from './GeoLocationMap';
 
@@ -42,7 +45,7 @@ function getCountryFlag(countryCode) {
 }
 
 // -------------------------------------------------------------
-// DonutGauge: Circular compliance gauge matching PowerDMARC
+// DonutGauge: Circular compliance gauge
 // -------------------------------------------------------------
 export function DonutGauge({ rate = 100, size = 52, strokeWidth = 5, label = null }) {
   const cleanRate = Math.min(100, Math.max(0, Number(rate) || 0));
@@ -127,7 +130,7 @@ export function SplitProgressBar({ title, passRate = 100, totalVolume = 0, passe
 }
 
 // -------------------------------------------------------------
-// MAIN COMPONENT: PowerDMARC Aggregate Reports Suite
+// MAIN COMPONENT: DMARC Aggregate Reports Suite
 // -------------------------------------------------------------
 export default function AggregateReportsView({
   domains = [],
@@ -167,9 +170,9 @@ export default function AggregateReportsView({
     return map[name] || name;
   };
 
-  // 8 PowerDMARC subviews:
-  // 'new_version' | 'per_source' | 'per_result' | 'per_org' | 'per_host' | 'detailed' | 'geolocation' | 'per_country'
-  const [subView, setSubView] = useState('new_version');
+  // 7 Aggregate subviews:
+  // 'per_source' | 'per_result' | 'per_org' | 'per_host' | 'detailed' | 'geolocation' | 'per_country'
+  const [subView, setSubView] = useState('per_source');
   const [domainFilter, setDomainFilter] = useState(selectedDomain || 'all');
   const [timePreset, setTimePreset] = useState('30d'); // '7d' | '30d' | '90d' | 'all' | 'custom'
   const [customDateFrom, setCustomDateFrom] = useState(() => {
@@ -188,6 +191,8 @@ export default function AggregateReportsView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [exportingFormat, setExportingFormat] = useState(null); // 'pdf' | 'xlsx' | null
+  const [exportMessage, setExportMessage] = useState(null);
 
   useEffect(() => {
     if (selectedDomain) {
@@ -350,9 +355,8 @@ export default function AggregateReportsView({
     });
   }, [detailedHits, hostnameSearch, ipSearch]);
 
-  // 8 PowerDMARC sub-navigation tabs
+  // 7 Aggregate sub-navigation tabs
   const subNavItems = [
-    { id: 'new_version', label: t('reports.viewNewVersion', 'New Version (Beta)'), icon: LayoutDashboard },
     { id: 'per_source', label: t('reports.viewPerSource', 'Per Sending Source'), icon: Server, count: sources.length },
     { id: 'per_result', label: t('reports.viewPerResult', 'Per Result'), icon: PieChart },
     { id: 'per_org', label: t('reports.viewPerOrg', 'Per Organization'), icon: Building2, count: organizations.length },
@@ -361,6 +365,262 @@ export default function AggregateReportsView({
     { id: 'geolocation', label: t('reports.viewGeolocation', 'Geolocation Report'), icon: Globe2, count: geoPoints.length },
     { id: 'per_country', label: t('reports.viewPerCountry', 'Per Country'), icon: Flag, count: countries.length }
   ];
+
+  // -------------------------------------------------------------
+  // Dynamic Tab Export Handler (PDF & Excel)
+  // -------------------------------------------------------------
+  const handleExportTab = async (format) => {
+    if (exportingFormat) return;
+    setExportingFormat(format);
+    setExportMessage(null);
+
+    try {
+      let timeWindow = 'Last 30 Days';
+      if (timePreset === '7d') timeWindow = 'Last 7 Days';
+      else if (timePreset === '90d') timeWindow = 'Last 90 Days';
+      else if (timePreset === 'all') timeWindow = 'All Available Time';
+      else if (timePreset === 'custom') timeWindow = `Custom (${customDateFrom || ''} to ${customDateTo || ''})`;
+
+      let tabTitle = t('reports.viewPerSource', 'Per Sending Source');
+      let columns = [];
+      let rows = [];
+      let stats = [];
+      let extra = {};
+
+      if (subView === 'per_source') {
+        tabTitle = t('reports.viewPerSource', 'Per Sending Source');
+        columns = [
+          { key: 'sourceName', label: t('reports.colSendingSource', 'Sending Source'), align: 'left', format: 'text' },
+          { key: 'baseDomain', label: 'Base Domain / ASN', align: 'left', format: 'text' },
+          { key: 'categoryTag', label: t('reports.colSourceType', 'Source Type'), align: 'center', format: 'text' },
+          { key: 'totalVolume', label: t('reports.colMessages', 'Messages'), align: 'right', format: 'number' },
+          { key: 'complianceRate', label: t('reports.colDmarcCompliance', 'DMARC Compliance'), align: 'center', format: 'percentage' },
+          { key: 'dkimRate', label: t('reports.colDkimVerification', 'DKIM Verification'), align: 'center', format: 'percentage' },
+          { key: 'spfRate', label: t('reports.colSpfVerification', 'SPF Verification'), align: 'center', format: 'percentage' },
+          { key: 'hostsCount', label: 'Sending Hosts', align: 'right', format: 'number' }
+        ];
+        rows = filteredSources.map((s) => ({
+          sourceName: s.sourceName,
+          baseDomain: s.baseDomain || s.asName || 'Direct Server',
+          categoryTag: s.categoryTag,
+          totalVolume: s.totalVolume,
+          complianceRate: s.complianceRate,
+          dkimRate: s.dkimRate,
+          spfRate: s.spfRate,
+          hostsCount: s.hosts?.length || 0
+        }));
+        stats = [
+          { label: t('reports.dmarcCompatibleSources', 'DMARC compatible sources'), count: sourceStats.compatible.count, volume: sourceStats.compatible.volume },
+          { label: t('reports.forwardedSources', 'Forwarded'), count: sourceStats.forwarded.count, volume: sourceStats.forwarded.volume },
+          { label: t('reports.failedSources', 'Failed'), count: sourceStats.failed.count, volume: sourceStats.failed.volume }
+        ];
+      } else if (subView === 'per_result') {
+        tabTitle = t('reports.viewPerResult', 'Per Result');
+        columns = [
+          { key: 'groupTitle', label: 'Result Group', align: 'left', format: 'text' },
+          { key: 'name', label: 'Authentication Flow', align: 'left', format: 'text' },
+          { key: 'count', label: t('reports.colMessages', 'Messages'), align: 'right', format: 'number' },
+          { key: 'pct', label: 'Flow Percentage', align: 'center', format: 'percentage' },
+          { key: 'dmarcStatus', label: 'DMARC Alignment', align: 'center', format: 'text' },
+          { key: 'spfStatus', label: 'SPF Status', align: 'center', format: 'text' },
+          { key: 'dkimStatus', label: 'DKIM Status', align: 'center', format: 'text' }
+        ];
+        if (perResultGroups) {
+          const cItems = (perResultGroups.correctGroup?.subItems || []).map((it) => ({
+            groupTitle: getResultGroupTitle(perResultGroups.correctGroup.title),
+            name: getSubItemName(it.name),
+            count: it.count,
+            pct: it.pct,
+            dmarcStatus: 'PASS',
+            spfStatus: it.name.includes('SPF') || it.name.includes('Fully') ? 'PASS' : 'VALID / UNALIGNED',
+            dkimStatus: it.name.includes('DKIM') || it.name.includes('Fully') ? 'PASS' : 'VALID / UNALIGNED'
+          }));
+          const aItems = (perResultGroups.authenticatedGroup?.subItems || []).map((it) => ({
+            groupTitle: getResultGroupTitle(perResultGroups.authenticatedGroup.title),
+            name: getSubItemName(it.name),
+            count: it.count,
+            pct: it.pct,
+            dmarcStatus: 'FAIL',
+            spfStatus: it.name.includes('SPF') ? 'VALID (UNALIGNED)' : 'FAIL',
+            dkimStatus: it.name.includes('DKIM') ? 'VALID (UNALIGNED)' : 'FAIL'
+          }));
+          const iItems = (perResultGroups.invalidGroup?.subItems || []).map((it) => ({
+            groupTitle: getResultGroupTitle(perResultGroups.invalidGroup.title),
+            name: getSubItemName(it.name),
+            count: it.count,
+            pct: it.pct,
+            dmarcStatus: 'FAIL',
+            spfStatus: 'FAIL',
+            dkimStatus: 'FAIL'
+          }));
+          rows = [...cItems, ...aItems, ...iItems];
+          extra = { perResultGroups };
+        }
+      } else if (subView === 'per_org') {
+        tabTitle = t('reports.viewPerOrg', 'Per Organization');
+        columns = [
+          { key: 'orgName', label: t('reports.colReportingOrg', 'Reporting Organization'), align: 'left', format: 'text' },
+          { key: 'totalVolume', label: t('reports.colMessages', 'Messages'), align: 'right', format: 'number' },
+          { key: 'uniqueIps', label: t('reports.colUniqueIps', 'Unique IPs'), align: 'center', format: 'number' },
+          { key: 'complianceRate', label: t('reports.colDmarcCompliance', 'DMARC Compliance'), align: 'center', format: 'percentage' },
+          { key: 'dkimRate', label: t('reports.colDkimVerification', 'DKIM Verification'), align: 'center', format: 'percentage' },
+          { key: 'spfRate', label: t('reports.colSpfVerification', 'SPF Verification'), align: 'center', format: 'percentage' },
+          { key: 'dispNone', label: 'Policy None (Delivered)', align: 'right', format: 'number' },
+          { key: 'dispQuar', label: 'Policy Quarantine', align: 'right', format: 'number' },
+          { key: 'dispRej', label: 'Policy Reject', align: 'right', format: 'number' }
+        ];
+        rows = filteredOrgs.map((o) => ({
+          orgName: o.orgName,
+          totalVolume: o.totalVolume,
+          uniqueIps: o.uniqueIps,
+          complianceRate: o.complianceRate,
+          dkimRate: o.dkimRate,
+          spfRate: o.spfRate,
+          dispNone: o.dispositions?.none || 0,
+          dispQuar: o.dispositions?.quarantine || 0,
+          dispRej: o.dispositions?.reject || 0
+        }));
+      } else if (subView === 'per_host') {
+        tabTitle = t('reports.viewPerHost', 'Per Host');
+        columns = [
+          { key: 'ptr', label: t('reports.colHostnamePtr', 'Hostname (PTR)'), align: 'left', format: 'text' },
+          { key: 'ip', label: 'Sending IP Address', align: 'left', format: 'text' },
+          { key: 'country', label: 'Country', align: 'center', format: 'text' },
+          { key: 'asName', label: 'Autonomous System (ISP)', align: 'left', format: 'text' },
+          { key: 'totalVolume', label: t('reports.colMessages', 'Messages'), align: 'right', format: 'number' },
+          { key: 'complianceRate', label: t('reports.colDmarcCompliance', 'DMARC Compliance'), align: 'center', format: 'percentage' },
+          { key: 'dkimRate', label: t('reports.colDkimVerification', 'DKIM Verification'), align: 'center', format: 'percentage' },
+          { key: 'spfRate', label: t('reports.colSpfVerification', 'SPF Verification'), align: 'center', format: 'percentage' },
+          { key: 'disposition', label: t('reports.colReceiverPolicy', 'Receiver Policy'), align: 'center', format: 'text' }
+        ];
+        rows = filteredHosts.map((h) => ({
+          ptr: h.ptr || 'No PTR Record',
+          ip: h.ip,
+          country: h.country || 'Unknown',
+          asName: h.asName || '—',
+          totalVolume: h.totalVolume,
+          complianceRate: h.complianceRate,
+          dkimRate: h.dkimRate,
+          spfRate: h.spfRate,
+          disposition: 'p=' + (h.disposition || 'none')
+        }));
+      } else if (subView === 'detailed') {
+        tabTitle = t('reports.viewDetailed', 'Detailed Stats');
+        columns = [
+          { key: 'hostname', label: t('reports.colSenderHostname', 'Sender Hostname'), align: 'left', format: 'text' },
+          { key: 'ip', label: 'Sending IP Address', align: 'left', format: 'text' },
+          { key: 'country', label: 'Country', align: 'center', format: 'text' },
+          { key: 'org', label: t('reports.colReportingOrg', 'Reporting Org'), align: 'left', format: 'text' },
+          { key: 'volume', label: t('reports.colVolume', 'Volume'), align: 'right', format: 'number' },
+          { key: 'compliant', label: t('reports.colCompliant', 'Compliant'), align: 'center', format: 'boolean' },
+          { key: 'dkimStatus', label: t('reports.colDkimStatus', 'DKIM Status'), align: 'center', format: 'text' },
+          { key: 'dkimSelector', label: 'DKIM Selector', align: 'center', format: 'text' },
+          { key: 'spfStatus', label: t('reports.colSpfStatus', 'SPF Status'), align: 'center', format: 'text' },
+          { key: 'disposition', label: t('reports.colDisposition', 'Disposition'), align: 'center', format: 'text' }
+        ];
+        rows = filteredDetailedHits.map((h) => ({
+          hostname: h.hostname || '—',
+          ip: h.ip,
+          country: h.country || 'Unknown',
+          org: h.org,
+          volume: h.volume,
+          compliant: !!h.compliant,
+          dkimStatus: h.dkimAligned ? 'Aligned' : 'Unaligned',
+          dkimSelector: h.dkimSelector || '—',
+          spfStatus: h.spfAligned ? 'Aligned' : 'Unaligned',
+          disposition: 'p=' + (h.disposition || 'none')
+        }));
+      } else if (subView === 'geolocation') {
+        tabTitle = t('reports.viewGeolocation', 'Geolocation Report');
+        columns = [
+          { key: 'country', label: 'Country', align: 'left', format: 'text' },
+          { key: 'countryCode', label: 'ISO Code', align: 'center', format: 'text' },
+          { key: 'city', label: 'City', align: 'left', format: 'text' },
+          { key: 'lat', label: 'Latitude', align: 'right', format: 'text' },
+          { key: 'lon', label: 'Longitude', align: 'right', format: 'text' },
+          { key: 'ipCount', label: 'Sending IPs', align: 'right', format: 'number' },
+          { key: 'totalVolume', label: 'Message Volume', align: 'right', format: 'number' },
+          { key: 'passRate', label: 'Pass Rate', align: 'center', format: 'percentage' }
+        ];
+        rows = geoPoints.map((p) => ({
+          country: p.country,
+          countryCode: p.countryCode,
+          city: p.city || '—',
+          lat: p.lat,
+          lon: p.lon,
+          ipCount: p.ipCount,
+          totalVolume: p.totalVolume,
+          passRate: p.passRate
+        }));
+      } else if (subView === 'per_country') {
+        tabTitle = t('reports.viewPerCountry', 'Per Country');
+        columns = [
+          { key: 'country', label: t('reports.colOriginCountry', 'Origin Country'), align: 'left', format: 'text' },
+          { key: 'countryCode', label: 'ISO Code', align: 'center', format: 'text' },
+          { key: 'totalVolume', label: t('reports.colMessages', 'Messages'), align: 'right', format: 'number' },
+          { key: 'uniqueIps', label: t('reports.colUniqueIps', 'Unique IPs'), align: 'center', format: 'number' },
+          { key: 'complianceRate', label: t('reports.colDmarcCompliance', 'DMARC Compliance'), align: 'center', format: 'percentage' },
+          { key: 'dkimRate', label: t('reports.colDkimVerification', 'DKIM Verification'), align: 'center', format: 'percentage' },
+          { key: 'spfRate', label: t('reports.colSpfVerification', 'SPF Verification'), align: 'center', format: 'percentage' },
+          { key: 'threatVolume', label: t('reports.colThreatVolume', 'Threat Volume'), align: 'right', format: 'number' }
+        ];
+        const countryRows = countries.filter((c) => {
+          if (!searchQuery) return true;
+          const q = searchQuery.toLowerCase();
+          return c.country && c.country.toLowerCase().includes(q);
+        });
+        rows = countryRows.map((c) => ({
+          country: c.country,
+          countryCode: c.countryCode || '',
+          totalVolume: c.totalVolume,
+          uniqueIps: c.uniqueIps,
+          complianceRate: c.complianceRate,
+          dkimRate: c.dkimRate,
+          spfRate: c.spfRate,
+          threatVolume: c.threatVolume || 0
+        }));
+      }
+
+      const payload = {
+        tab_id: subView,
+        tab_title: tabTitle,
+        format,
+        domain: domainFilter,
+        time_window: timeWindow,
+        filters: {
+          search: searchQuery,
+          category: sourceCategoryFilter,
+          hostnameSearch,
+          ipSearch
+        },
+        summary,
+        stats,
+        columns,
+        rows,
+        extra,
+        client_org: currentUser?.organization_name || '',
+        user_logon: currentUser?.username || '',
+        logo_url: currentUser?.logo_url || '',
+        language
+      };
+
+      const result = await exportAggregateTab(payload);
+      setExportMessage({
+        type: 'success',
+        text: `${tabTitle} exported to ${format.toUpperCase()} (${result.filename})`
+      });
+      setTimeout(() => setExportMessage(null), 5000);
+    } catch (err) {
+      console.error('Export error:', err);
+      setExportMessage({
+        type: 'error',
+        text: err.message || t('reports.exportFailed', 'Failed to export tab data')
+      });
+      setTimeout(() => setExportMessage(null), 6000);
+    } finally {
+      setExportingFormat(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -458,23 +718,82 @@ export default function AggregateReportsView({
           </div>
         </div>
 
-        {/* Action: Jump to Full Report Generation */}
-        {onSwitchToGenerate && (
+        {/* Action: Tab Exports & Full Report */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Export to PDF */}
           <button
-            onClick={() => onSwitchToGenerate({
-              domain: domainFilter,
-              preset: timePreset,
-              customDateFrom: timePreset === 'custom' ? customDateFrom : null,
-              customDateTo: timePreset === 'custom' ? customDateTo : null
-            })}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 transition shadow-lg shadow-cyan-500/20 flex items-center gap-2 cursor-pointer"
+            onClick={() => handleExportTab('pdf')}
+            disabled={exportingFormat !== null}
+            title={t('reports.exportTabPdf', 'Export PDF')}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-950 border border-slate-800 text-slate-200 hover:text-white hover:border-rose-500/50 hover:bg-rose-950/20 transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>{t('reports.exportCurrentView', 'Generate Full Report with Current Filters')}</span>
-            <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
+            {exportingFormat === 'pdf' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+            ) : (
+              <FileText className="w-3.5 h-3.5 text-rose-400" />
+            )}
+            <span>{exportingFormat === 'pdf' ? t('reports.exportingPdf', 'Exporting PDF...') : t('reports.exportTabPdf', 'Export PDF')}</span>
           </button>
-        )}
+
+          {/* Export to Excel */}
+          <button
+            onClick={() => handleExportTab('xlsx')}
+            disabled={exportingFormat !== null}
+            title={t('reports.exportTabExcel', 'Export Excel')}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-950 border border-slate-800 text-slate-200 hover:text-white hover:border-emerald-500/50 hover:bg-emerald-950/20 transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+          >
+            {exportingFormat === 'xlsx' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+            ) : (
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            )}
+            <span>{exportingFormat === 'xlsx' ? t('reports.exportingExcel', 'Exporting Excel...') : t('reports.exportTabExcel', 'Export Excel')}</span>
+          </button>
+
+          {/* Action: Jump to Full Report Generation */}
+          {onSwitchToGenerate && (
+            <button
+              onClick={() => onSwitchToGenerate({
+                domain: domainFilter,
+                preset: timePreset,
+                customDateFrom: timePreset === 'custom' ? customDateFrom : null,
+                customDateTo: timePreset === 'custom' ? customDateTo : null
+              })}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 transition shadow-lg shadow-cyan-500/20 flex items-center gap-2 cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>{t('reports.exportCurrentView', 'Generate Full Report with Current Filters')}</span>
+              <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Export notification message */}
+      {exportMessage && (
+        <div
+          className={`p-3.5 rounded-xl border text-xs flex items-center justify-between shadow-lg transition-all animate-in fade-in ${
+            exportMessage.type === 'success'
+              ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+              : 'bg-rose-950/30 border-rose-500/40 text-rose-300'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            {exportMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span className="font-semibold">{exportMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setExportMessage(null)}
+            className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Error alert if any */}
       {error && (
@@ -485,7 +804,7 @@ export default function AggregateReportsView({
       )}
 
       {/* ======================================================== */}
-      {/* 8 POWERDMARC SUB-TABS NAVIGATION BAR                    */}
+      {/* 8 SUB-TABS NAVIGATION BAR                                */}
       {/* ======================================================== */}
       <div className="overflow-x-auto pb-1 border-b border-slate-800">
         <div className="flex items-center gap-2 min-w-max">
@@ -520,256 +839,7 @@ export default function AggregateReportsView({
       </div>
 
       {/* ======================================================== */}
-      {/* VIEW 1: NEW VERSION (BETA / EXECUTIVE OVERVIEW)          */}
-      {/* ======================================================== */}
-      {subView === 'new_version' && (
-        <div className="space-y-6">
-          {/* Top 4 PowerDMARC Metric KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* Total Volume */}
-            <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-lg">
-              <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <span>{t('reports.totalVolume', 'Total Volume')}</span>
-                <Radio className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div className="text-3xl font-black text-white mt-2 font-mono">
-                {summary.totalVolume ? summary.totalVolume.toLocaleString() : '0'}
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1">{t('reports.totalVolumeDesc', 'Aggregated email messages')}</p>
-            </div>
-
-            {/* DMARC Compliant % */}
-            <div className="glass-panel p-5 rounded-2xl border border-emerald-500/30 bg-slate-900/50 shadow-lg">
-              <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <span>{t('reports.dmarcCompliant', 'DMARC Compliant')}</span>
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="text-3xl font-black text-emerald-400 mt-2 font-mono">
-                {summary.complianceRate}%
-              </div>
-              <p className="text-[11px] text-emerald-400/80 mt-1">
-                {summary.compliantVolume.toLocaleString()} {t('reports.alignedMessages', 'aligned messages')}
-              </p>
-            </div>
-
-            {/* Forwarded % */}
-            <div className="glass-panel p-5 rounded-2xl border border-blue-500/30 bg-slate-900/50 shadow-lg">
-              <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <span>{t('reports.forwarded', 'Forwarded')}</span>
-                <Network className="w-4 h-4 text-blue-400" />
-              </div>
-              <div className="text-3xl font-black text-blue-400 mt-2 font-mono">
-                {summary.totalVolume > 0
-                  ? Number(((summary.forwardedVolume / summary.totalVolume) * 100).toFixed(1))
-                  : 0}
-                %
-              </div>
-              <p className="text-[11px] text-blue-300/80 mt-1">
-                {summary.forwardedVolume.toLocaleString()} {t('reports.indirectRelays', 'indirect relays')}
-              </p>
-            </div>
-
-            {/* Failed % */}
-            <div className="glass-panel p-5 rounded-2xl border border-rose-500/30 bg-slate-900/50 shadow-lg">
-              <div className="flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <span>{t('reports.failed', 'Failed')}</span>
-                <ShieldAlert className="w-4 h-4 text-rose-400" />
-              </div>
-              <div className="text-3xl font-black text-rose-400 mt-2 font-mono">
-                {summary.totalVolume > 0
-                  ? Number(((summary.failedVolume / summary.totalVolume) * 100).toFixed(1))
-                  : 0}
-                %
-              </div>
-              <p className="text-[11px] text-rose-400/80 mt-1">
-                {summary.failedVolume.toLocaleString()} {t('reports.unalignedThreats', 'unaligned / threats')}
-              </p>
-            </div>
-          </div>
-
-          {/* Results Overview Chart & Top Sending Sources Donut */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Results Overview Timeline Bar Chart */}
-            <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-cyan-400" />
-                    {t('reports.resultsOverview', 'Results Overview')}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {t('reports.timelineDesc', 'Daily authentication delivery breakdown across the selected period.')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 text-[11px] font-medium">
-                  <span className="flex items-center gap-1.5 text-emerald-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> {t('reports.compliant', 'Compliant')}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-blue-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> {t('reports.forwarded', 'Forwarded')}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-rose-400">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> {t('reports.failed', 'Failed')}
-                  </span>
-                </div>
-              </div>
-
-              {/* Interactive Timeline Visualizer */}
-              <div className="h-56 flex items-end gap-2 pt-6 pb-2 px-2 border-b border-slate-800/80 overflow-x-auto">
-                {timeline.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
-                    {t('reports.noTimeline', 'No timeline telemetry for the chosen window.')}
-                  </div>
-                ) : (
-                  timeline.map((point, idx) => {
-                    const maxVol = Math.max(...timeline.map((p) => p.totalVolume), 1);
-                    const compHeight = (point.compliantVolume / maxVol) * 100;
-                    const fwdHeight = (point.forwardedVolume / maxVol) * 100;
-                    const failHeight = (point.failedVolume / maxVol) * 100;
-                    return (
-                      <div
-                        key={idx}
-                        className="flex-1 min-w-[28px] h-full flex flex-col justify-end items-center group relative cursor-pointer"
-                      >
-                        {/* Tooltip on hover */}
-                        <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-950 border border-slate-700 p-2 rounded-xl text-[10px] shadow-2xl z-20 whitespace-nowrap">
-                          <span className="font-bold text-white">{point.date}</span>
-                          <span className="text-emerald-400">{t('reports.compliant', 'Compliant')}: {point.compliantVolume.toLocaleString()}</span>
-                          <span className="text-blue-400">{t('reports.forwarded', 'Forwarded')}: {point.forwardedVolume.toLocaleString()}</span>
-                          <span className="text-rose-400">{t('reports.failed', 'Failed')}: {point.failedVolume.toLocaleString()}</span>
-                          <span className="text-slate-400 border-t border-slate-800 pt-0.5 mt-0.5">
-                            {t('reports.total', 'Total')}: {point.totalVolume.toLocaleString()}
-                          </span>
-                        </div>
-
-                        {/* Stacked bar segments */}
-                        <div className="w-4 rounded-t-md overflow-hidden flex flex-col justify-end bg-slate-950">
-                          {failHeight > 0 && (
-                            <div style={{ height: `${failHeight}%` }} className="bg-rose-500 w-full" />
-                          )}
-                          {fwdHeight > 0 && (
-                            <div style={{ height: `${fwdHeight}%` }} className="bg-blue-500 w-full" />
-                          )}
-                          {compHeight > 0 && (
-                            <div style={{ height: `${compHeight}%` }} className="bg-emerald-500 w-full" />
-                          )}
-                        </div>
-                        <span className="text-[9px] text-slate-500 font-mono mt-1 transform -rotate-45 origin-top-left">
-                          {point.date.slice(5)}
-                        </span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Top Sending Sources Donut Summary */}
-            <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl flex flex-col justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <PieChart className="w-4 h-4 text-cyan-400" />
-                  {t('reports.topSendingSources', 'Top Sending Sources')}
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">{t('reports.volumeDistDesc', 'Volume distribution by detected mail service.')}</p>
-              </div>
-
-              <div className="py-4 flex flex-col items-center justify-center">
-                <DonutGauge rate={summary.complianceRate} size={84} strokeWidth={8} label={t('reports.overallScore', 'Overall Score')} />
-              </div>
-
-              <div className="space-y-2.5 border-t border-slate-800/80 pt-4">
-                {sources.slice(0, 4).map((s, idx) => {
-                  const pct = summary.totalVolume > 0 ? ((s.totalVolume / summary.totalVolume) * 100).toFixed(1) : 0;
-                  return (
-                    <div key={idx} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 truncate">
-                        <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-                        <span className="font-semibold text-slate-200 truncate">{s.sourceName}</span>
-                      </div>
-                      <div className="flex items-center gap-2 font-mono shrink-0">
-                        <span className="text-white font-bold">{s.totalVolume.toLocaleString()}</span>
-                        <span className="text-slate-500 text-[10px]">({pct}%)</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Top Sending Sources Table */}
-          <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Server className="w-4 h-4 text-cyan-400" />
-                  {t('reports.sendingSourcesOverview', 'Sending Sources Overview')}
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {t('reports.sendingSourcesOverviewDesc', 'High-level breakdown of all email sending vendors identified in DMARC aggregates.')}
-                </p>
-              </div>
-              <button
-                onClick={() => setSubView('per_source')}
-                className="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
-              >
-                <span>{t('reports.viewFullPerSource', 'View Full Per-Source Explorer')}</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
-                  <tr>
-                    <th className="py-3 px-4">{t('reports.colSendingSource', 'Sending Source')}</th>
-                    <th className="py-3 px-4">{t('reports.colSourceType', 'Source Type')}</th>
-                    <th className="py-3 px-4 text-right">{t('reports.colTotalMessages', 'Total Messages')}</th>
-                    <th className="py-3 px-4 text-center">{t('reports.colDmarcCompliant', 'DMARC Compliant')}</th>
-                    <th className="py-3 px-4">{t('reports.colDkimVerification', 'DKIM Verification')}</th>
-                    <th className="py-3 px-4">{t('reports.colSpfVerification', 'SPF Verification')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                  {sources.slice(0, 5).map((s, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/30 transition">
-                      <td className="py-3 px-4 font-bold text-white">{s.sourceName}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                            s.categoryTag === 'DMARC compatible sources'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                              : s.categoryTag === 'Forwarded'
-                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                              : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                          }`}
-                        >
-                          {getCategoryTagLabel(s.categoryTag)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-white">
-                        {s.totalVolume.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <DonutGauge rate={s.complianceRate} size={42} strokeWidth={4} />
-                      </td>
-                      <td className="py-3 px-4">
-                        <SplitProgressBar title="DKIM" passRate={s.dkimRate} />
-                      </td>
-                      <td className="py-3 px-4">
-                        <SplitProgressBar title="SPF" passRate={s.spfRate} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* VIEW 2: PER SENDING SOURCE (WITH EXPANDABLE NESTED ROWS) */}
+      {/* VIEW 1: PER SENDING SOURCE (WITH EXPANDABLE NESTED ROWS) */}
       {/* ======================================================== */}
       {subView === 'per_source' && (
         <div className="space-y-6">
@@ -935,7 +1005,7 @@ export default function AggregateReportsView({
                             </td>
                           </tr>
 
-                          {/* EXPANDABLE NESTED ROW: EXACT POWERDMARC PATTERN */}
+                          {/* EXPANDABLE NESTED ROW */}
                           {isExpanded && (
                             <tr className="bg-slate-950/80">
                               <td colSpan="7" className="p-4 pl-12 border-b border-slate-800">
@@ -1035,11 +1105,11 @@ export default function AggregateReportsView({
       )}
 
       {/* ======================================================== */}
-      {/* VIEW 3: PER RESULT (EXACT 3 POWERDMARC GROUPS)          */}
+      {/* VIEW 3: PER RESULT (3 GROUPS)                            */}
       {/* ======================================================== */}
       {subView === 'per_result' && perResultGroups && (
         <div className="space-y-6">
-          {/* Top 3 Classification Groups matching PowerDMARC */}
+          {/* Top 3 Classification Groups */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* GROUP 1: DMARC correct - DKIM or SPF aligned */}
             <div className="glass-panel p-5 rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/20 via-slate-900/60 to-slate-900/80 shadow-xl space-y-4">
@@ -1285,7 +1355,7 @@ export default function AggregateReportsView({
       {/* ======================================================== */}
       {subView === 'per_host' && (
         <div className="space-y-6">
-          {/* 3 Top Donut Summary Cards matching PowerDMARC */}
+          {/* 3 Top Donut Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-900/50 shadow-lg flex items-center justify-between">
               <div>
@@ -1432,7 +1502,7 @@ export default function AggregateReportsView({
       {/* ======================================================== */}
       {subView === 'detailed' && (
         <div className="space-y-4">
-          {/* Dual Search Filters matching PowerDMARC */}
+          {/* Dual Search Filters */}
           <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg flex flex-col md:flex-row items-center gap-4">
             <div className="relative flex-1 w-full">
               <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />

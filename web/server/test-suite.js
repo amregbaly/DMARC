@@ -1,7 +1,14 @@
 import assert from 'node:assert';
 import net from 'node:net';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import fs from 'node:fs';
+import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import db from './db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { encrypt, decrypt, maskSecret } from './services/crypto.js';
 import {
   renderEmail,
@@ -562,6 +569,106 @@ await runAsyncTest('In-process SMTP server receives and validates queued email',
     assert.strictEqual(logs.logs[0].status, 'sent');
   } finally {
     server.close();
+  }
+});
+
+// ----------------------------------------------------
+// 6. AGGREGATE VIEWS TAB EXPORTER TESTS (PDF & XLSX)
+// ----------------------------------------------------
+console.log('\n--- 6. Aggregate Views Tab Exporter (PDF & Excel) ---');
+
+await runAsyncTest('Export Tab to Excel (.xlsx) with styled columns and summary KPIs', async () => {
+  const tmpPayload = path.join('/tmp', `test_tab_payload_${Date.now()}.json`);
+  const outDir = path.resolve(__dirname, '../../reporting/output');
+  const mockTab = {
+    tab_id: 'per_host',
+    tab_title: 'Per Host',
+    domain: 'voxera.net',
+    time_window: 'Last 30 Days',
+    summary: { totalVolume: 1200, compliantVolume: 1100, failedVolume: 100, complianceRate: 91.7 },
+    columns: [
+      { key: 'ptr', label: 'Hostname', align: 'left', format: 'text' },
+      { key: 'ip', label: 'IP', align: 'left', format: 'text' },
+      { key: 'totalVolume', label: 'Messages', align: 'right', format: 'number' },
+      { key: 'complianceRate', label: 'Compliance', align: 'center', format: 'percentage' }
+    ],
+    rows: [
+      { ptr: 'mail.google.com', ip: '209.85.220.41', totalVolume: 1100, complianceRate: 100.0 },
+      { ptr: 'unknown.host', ip: '198.51.100.1', totalVolume: 100, complianceRate: 0.0 }
+    ]
+  };
+
+  await fs.promises.writeFile(tmpPayload, JSON.stringify(mockTab), 'utf8');
+
+  try {
+    const scriptPath = path.resolve(__dirname, '../../reporting/engine/tab_exporter.py');
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile('python3', [scriptPath, '--input', tmpPayload, '--format', 'xlsx', '--output-dir', outDir], (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        resolve({ stdout });
+      });
+    });
+
+    const res = JSON.parse(stdout.trim());
+    assert.strictEqual(res.status, 'success');
+    assert.strictEqual(res.format, 'xlsx');
+    assert(fs.existsSync(res.path), 'Output Excel file must exist on disk');
+
+    // Verify XLSX zip magic bytes PK
+    const fd = await fs.promises.open(res.path, 'r');
+    const buf = Buffer.alloc(4);
+    await fd.read(buf, 0, 4, 0);
+    await fd.close();
+    assert.strictEqual(buf.toString('utf8', 0, 2), 'PK', 'XLSX must have valid zip header');
+  } finally {
+    if (fs.existsSync(tmpPayload)) await fs.promises.unlink(tmpPayload);
+  }
+});
+
+await runAsyncTest('Export Tab to PDF (.pdf) with Executive Light styling and vector layout', async () => {
+  const tmpPayload = path.join('/tmp', `test_tab_payload_pdf_${Date.now()}.json`);
+  const outDir = path.resolve(__dirname, '../../reporting/output');
+  const mockTab = {
+    tab_id: 'per_org',
+    tab_title: 'Per Organization',
+    domain: 'voxera.net',
+    time_window: 'Last 30 Days',
+    summary: { totalVolume: 2500, compliantVolume: 2400, failedVolume: 100, complianceRate: 96.0 },
+    columns: [
+      { key: 'orgName', label: 'Reporting Organization', align: 'left', format: 'text' },
+      { key: 'totalVolume', label: 'Messages', align: 'right', format: 'number' },
+      { key: 'complianceRate', label: 'Compliance', align: 'center', format: 'percentage' }
+    ],
+    rows: [
+      { orgName: 'Google LLC', totalVolume: 2400, complianceRate: 98.0 },
+      { orgName: 'Yahoo! Inc', totalVolume: 100, complianceRate: 85.0 }
+    ]
+  };
+
+  await fs.promises.writeFile(tmpPayload, JSON.stringify(mockTab), 'utf8');
+
+  try {
+    const scriptPath = path.resolve(__dirname, '../../reporting/engine/tab_exporter.py');
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile('python3', [scriptPath, '--input', tmpPayload, '--format', 'pdf', '--output-dir', outDir], (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        resolve({ stdout });
+      });
+    });
+
+    const res = JSON.parse(stdout.trim());
+    assert.strictEqual(res.status, 'success');
+    assert.strictEqual(res.format, 'pdf');
+    assert(fs.existsSync(res.path), 'Output PDF file must exist on disk');
+
+    // Verify PDF magic bytes %PDF
+    const fd = await fs.promises.open(res.path, 'r');
+    const buf = Buffer.alloc(4);
+    await fd.read(buf, 0, 4, 0);
+    await fd.close();
+    assert.strictEqual(buf.toString('utf8'), '%PDF', 'PDF must have valid %PDF header');
+  } finally {
+    if (fs.existsSync(tmpPayload)) await fs.promises.unlink(tmpPayload);
   }
 });
 

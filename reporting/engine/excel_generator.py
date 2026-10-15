@@ -4,6 +4,13 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image as OpenpyxlImage
+try:
+    from engine.logo_resolver import get_logo_openpyxl_image
+except ImportError:
+    try:
+        from reporting.engine.logo_resolver import get_logo_openpyxl_image
+    except ImportError:
+        from logo_resolver import get_logo_openpyxl_image
 
 class DmarcExcelGenerator:
     def __init__(self, template_config: Dict[str, Any]):
@@ -59,14 +66,10 @@ class DmarcExcelGenerator:
         ws_sum.views.sheetView[0].showGridLines = True
         
         # Insert Logo if present
-        logo_rel = self.template.get("logo", "templates/assets/sentinel_logo.png")
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        logo_full = os.path.join(base_dir, logo_rel) if not os.path.isabs(logo_rel) else logo_rel
-        if os.path.exists(logo_full) and logo_full.endswith(".png"):
+        logo_spec = self.template.get("logo")
+        img = get_logo_openpyxl_image(logo_spec, max_width=180, max_height=45, fallback=True)
+        if img:
             try:
-                img = OpenpyxlImage(logo_full)
-                img.width = 180
-                img.height = 45
                 ws_sum.add_image(img, "A1")
             except Exception as e:
                 print("Could not attach Excel image:", e)

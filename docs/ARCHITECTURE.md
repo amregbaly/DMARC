@@ -130,7 +130,7 @@ A standalone Python microservice built with FastAPI:
 A Single Page Application (SPA) built with React 19, Vite, Tailwind CSS v4, and Recharts:
 * **Modular Tab Architecture**:
   * `overview`: High-level executive KPI grid, traffic timeseries, 4-way alignment matrix, top senders.
-  * `health`: PowerDMARC-style live DNS protocol inspector (SPF lookup counter, DMARC tags, DKIM selector, BIMI, MTA-STS, TLS-RPT, DNSSEC).
+  * `health`: Live DNS protocol inspector (SPF lookup counter, DMARC tags, DKIM selector, BIMI, MTA-STS, TLS-RPT, DNSSEC).
   * `alignment`: SPF and DKIM pass/fail donuts and override tracking.
   * `threats`: SOC threat feed, attacker ASN ranking, geographic breakdown, containment stats.
   * `alerts`: User alerting rules, dry-run testing engine, incident history.
