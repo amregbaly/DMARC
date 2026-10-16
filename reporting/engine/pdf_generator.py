@@ -1,6 +1,7 @@
 import os
 import json
 import base64
+import html as html_lib
 from datetime import datetime
 from typing import Dict, Any
 from playwright.sync_api import sync_playwright
@@ -94,6 +95,32 @@ class DmarcPdfGenerator:
         google_yahoo_compliant = pass_rate >= 95.0 and current_policy in ["quarantine", "reject"]
         pci_dss_compliant = current_policy in ["quarantine", "reject"]
         rfc7489_aligned = pass_rate >= 90.0
+
+        # AI Executive Briefing Callout
+        ai_briefing_html = ""
+        ai_summary_raw = data.get("ai_summary")
+        if ai_summary_raw:
+            paragraphs = [p.strip() for p in str(ai_summary_raw).split("\n\n") if p.strip()]
+            if not paragraphs:
+                paragraphs = [str(ai_summary_raw).strip()]
+            formatted_paragraphs = "".join([f"<p style='margin: 4px 0 6px 0; line-height: 1.5;'>{html_lib.escape(p)}</p>" for p in paragraphs])
+            ai_title = "Evaluación Ejecutiva de Inteligencia Artificial" if is_es else "Executive AI Security Briefing"
+            ai_subtitle = "Síntesis Automatizada de Telemetría RFC" if is_es else "Automated RFC Telemetry Synthesis"
+            ai_briefing_html = f"""
+            <div style="margin-top: 14px; padding: 12px 16px; background-color: #f8fafc; border-left: 4px solid {colors.get('primary', '#0284c7')}; border-radius: 6px; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                <span style="font-size: 8.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: {colors.get('primary', '#0284c7')};">
+                  🤖 {ai_title}
+                </span>
+                <span style="font-size: 7.5pt; color: #64748b; font-family: monospace;">
+                  {ai_subtitle}
+                </span>
+              </div>
+              <div style="font-size: 8.5pt; color: #1e293b;">
+                {formatted_paragraphs}
+              </div>
+            </div>
+            """
 
         html = f"""<!DOCTYPE html>
 <html lang="{self.lang}">
@@ -504,6 +531,7 @@ class DmarcPdfGenerator:
       <div class="kpi-label">{labels['kpi_threats']}</div>
     </div>
   </div>
+  {ai_briefing_html}
 </div>
 
 <!-- Section 2: Regulatory & Compliance Scorecard -->

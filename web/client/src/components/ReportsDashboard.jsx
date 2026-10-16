@@ -25,7 +25,11 @@ import {
   Save,
   Layers,
   Play,
-  Mail
+  Mail,
+  Sparkles,
+  Bot,
+  Wand2,
+  Copy
 } from 'lucide-react';
 import {
   fetchReportTemplates,
@@ -40,7 +44,10 @@ import {
   getDownloadReportUrl,
   downloadReportFile,
   updateProfile,
-  sendReportByEmail
+  sendReportByEmail,
+  fetchAiStatus,
+  generateAiExecutiveSummary,
+  fetchOverview
 } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 import AggregateReportsView from './AggregateReportsView';
@@ -72,6 +79,15 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
   const [generatedResult, setGeneratedResult] = useState(null);
+
+  // State: Executive AI Summary
+  const [aiStatus, setAiStatus] = useState(null);
+  const [aiSummaryText, setAiSummaryText] = useState('');
+  const [generatingAiSummary, setGeneratingAiSummary] = useState(false);
+  const [aiSummaryMeta, setAiSummaryMeta] = useState(null);
+  const [includeAiSummary, setIncludeAiSummary] = useState(true);
+  const [aiSummaryError, setAiSummaryError] = useState(null);
+  const [copiedAiSummary, setCopiedAiSummary] = useState(false);
 
   // State: Report History
   const [history, setHistory] = useState([]);
@@ -168,7 +184,71 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
     loadTemplates();
     loadHistory();
     loadSchedules();
+    loadAiStatus();
   }, []);
+
+  async function loadAiStatus() {
+    try {
+      const status = await fetchAiStatus();
+      setAiStatus(status);
+    } catch (e) {
+      console.warn('Failed to fetch AI status:', e);
+    }
+  }
+
+  async function handleGenerateAiExecutiveSummary() {
+    setGeneratingAiSummary(true);
+    setAiSummaryError(null);
+    try {
+      let overviewData = {};
+      try {
+        const ovParams = {};
+        if (reportDomain && reportDomain !== 'all') ovParams.domain = reportDomain;
+        overviewData = await fetchOverview(ovParams);
+      } catch (e) {
+        console.warn('Overview fetch error for AI summary context:', e);
+      }
+
+      const metricsContext = {
+        domain: reportDomain,
+        timeRangePreset: datePreset,
+        customDateFrom: datePreset === 'custom' ? customFrom : undefined,
+        customDateTo: datePreset === 'custom' ? customTo : undefined,
+        reporterOrg: orgFilter !== 'all' ? orgFilter : undefined,
+        dispositionFilter: dispositionFilter !== 'all' ? dispositionFilter : undefined,
+        language: reportLanguage || language || 'en',
+        telemetry: {
+          totalMessages: overviewData?.summary?.total_messages || overviewData?.total_messages || 0,
+          passRate: overviewData?.summary?.pass_percentage || overviewData?.pass_percentage || 0,
+          passedMessages: overviewData?.summary?.passed_messages || 0,
+          failedMessages: overviewData?.summary?.failed_messages || 0,
+          currentPolicy: overviewData?.policy || 'p=none',
+          dispositionBreakdown: overviewData?.disposition || overviewData?.summary?.disposition || {}
+        }
+      };
+
+      const res = await generateAiExecutiveSummary(metricsContext);
+      if (res && res.summary) {
+        setAiSummaryText(res.summary);
+        setAiSummaryMeta(res.meta || null);
+        setIncludeAiSummary(true);
+      } else {
+        throw new Error('AI service returned an empty summary.');
+      }
+    } catch (err) {
+      console.error('Failed to generate AI executive summary:', err);
+      setAiSummaryError(err.message || 'Failed to generate AI executive summary.');
+    } finally {
+      setGeneratingAiSummary(false);
+    }
+  }
+
+  function handleCopyAiSummary() {
+    if (!aiSummaryText) return;
+    navigator.clipboard.writeText(aiSummaryText);
+    setCopiedAiSummary(true);
+    setTimeout(() => setCopiedAiSummary(false), 2000);
+  }
 
   useEffect(() => {
     if (currentUser) {
@@ -277,7 +357,8 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
         organization_name: identityOrg || currentUser?.organization_name || '',
         user_logon: identityLogon || currentUser?.username || '',
         logo_url: identityLogo || currentUser?.logo_url || '',
-        language: reportLanguage || language || 'en'
+        language: reportLanguage || language || 'en',
+        ai_summary: (includeAiSummary && aiSummaryText && aiSummaryText.trim()) ? aiSummaryText.trim() : undefined
       });
 
       setGeneratedResult(res);
@@ -657,6 +738,148 @@ export default function ReportsDashboard({ domains = [], selectedDomain, onSelec
                       </div>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Executive AI Security Briefing Card */}
+              <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900/90 via-slate-950/80 to-slate-900/90 p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
+                {/* Ambient glow accent */}
+                <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20 text-white shrink-0">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>{t('reports.aiBriefingTitle', 'Executive AI Security Briefing')}</span>
+                        {aiStatus?.enabled ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            {aiStatus.provider ? aiStatus.provider.toUpperCase() : 'AI READY'}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                            {t('reports.aiNotConfigured', 'AI Not Configured')}
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        {t('reports.aiBriefingSubtitle', 'Automated executive narrative synthesizing RFC telemetry and security posture')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions toolbar */}
+                  <div className="flex items-center gap-2">
+                    {aiStatus?.enabled && (
+                      <button
+                        type="button"
+                        onClick={handleGenerateAiExecutiveSummary}
+                        disabled={generatingAiSummary}
+                        className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-md shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
+                      >
+                        {generatingAiSummary ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>{t('reports.generatingAiBriefing', 'Synthesizing Telemetry...')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-3.5 h-3.5" />
+                            <span>{aiSummaryText ? t('reports.regenerateAiBriefing', 'Regenerate Briefing') : t('reports.generateAiBriefing', 'Generate AI Briefing')}</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {aiSummaryText && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleCopyAiSummary}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition flex items-center gap-1 border border-slate-700 cursor-pointer"
+                          title="Copy summary text"
+                        >
+                          {copiedAiSummary ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="text-emerald-400">{t('reports.copiedBriefing', 'Copied!')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>{t('reports.copyAiBriefing', 'Copy')}</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAiSummaryText('')}
+                          className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 text-xs transition border border-slate-700/60 cursor-pointer"
+                          title="Clear summary"
+                        >
+                          {t('reports.clearAiBriefing', 'Clear')}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* AI Status Warning if disabled */}
+                {!aiStatus?.enabled && (
+                  <div className="mb-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300/90 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="font-semibold">{t('reports.aiNotConfigured', 'AI Engine Not Configured')}</div>
+                      <div className="text-[11px] text-amber-300/70 mt-0.5">
+                        {t('reports.aiNotConfiguredDesc', 'Configure API keys in Admin AI Intelligence panel to enable automated executive report synthesis.')}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generation error alert */}
+                {aiSummaryError && (
+                  <div className="mb-3 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-400 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{aiSummaryError}</span>
+                  </div>
+                )}
+
+                {/* Textarea for preview & direct editing */}
+                <div className="relative">
+                  <textarea
+                    rows={5}
+                    value={aiSummaryText}
+                    onChange={(e) => setAiSummaryText(e.target.value)}
+                    placeholder={t('reports.aiBriefingPlaceholder', 'Click "Generate AI Briefing" to create an automated, CISO-grade narrative synthesizing compliance rates, spoofing volume, SPF/DKIM gaps, and strategic policy recommendations...')}
+                    className="w-full bg-slate-950/80 border border-slate-800 text-slate-200 placeholder-slate-600 rounded-xl p-3.5 text-xs leading-relaxed font-sans focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500/50 resize-y transition shadow-inner"
+                  />
+                  {aiSummaryMeta && (
+                    <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500 font-mono px-1">
+                      <span>Model: {aiSummaryMeta.model} ({aiSummaryMeta.provider})</span>
+                      {aiSummaryMeta.latencyMs && <span>Synthesis Latency: {aiSummaryMeta.latencyMs.toLocaleString()} ms</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Inclusion checkbox */}
+                <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={includeAiSummary}
+                      onChange={(e) => setIncludeAiSummary(e.target.checked)}
+                      className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-semibold text-slate-200">
+                      {t('reports.includeAiBriefing', 'Include Executive AI Briefing in exported PDF & Excel reports')}
+                    </span>
+                  </label>
+                  <span className="text-[10px] text-slate-500 hidden sm:inline">
+                    {t('reports.includeAiBriefingDesc', 'Prominently featured on Page 1 of PDF and Sheet 1 of Excel.')}
+                  </span>
                 </div>
               </div>
 

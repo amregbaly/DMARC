@@ -35,6 +35,16 @@ import {
   executeReportGeneration
 } from './workers/reportScheduler.js';
 import { resolveCoordinates } from './services/countryCoords.js';
+import {
+  testAiConnection,
+  diagnoseLogRecord,
+  generateExecutiveSummary,
+  analyzeShadowItAndVendors,
+  runTelemetryCopilot,
+  simulatePolicyEnforcement,
+  detectPredictiveAnomalies,
+  optimizeSpfAndBimi
+} from './services/aiService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2245,7 +2255,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
           }
         },
         sources: {
-          terms: { field: 'source_name.keyword', size: 50 },
+          terms: { field: 'source_name.keyword', size: 250 },
           aggs: {
             total_vol: { sum: { field: 'message_count' } },
             passed_vol: {
@@ -2268,7 +2278,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
               aggs: { vol: { sum: { field: 'message_count' } } }
             },
             top_hosts: {
-              terms: { field: 'source_ip_address.keyword', size: 20 },
+              terms: { field: 'source_ip_address.keyword', size: 50 },
               aggs: {
                 vol: { sum: { field: 'message_count' } },
                 passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
@@ -2281,7 +2291,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
           }
         },
         organizations: {
-          terms: { field: 'org_name.keyword', size: 50 },
+          terms: { field: 'org_name.keyword', size: 100 },
           aggs: {
             total_vol: { sum: { field: 'message_count' } },
             passed_vol: {
@@ -2306,7 +2316,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
           }
         },
         hosts: {
-          terms: { field: 'source_ip_address.keyword', size: 100 },
+          terms: { field: 'source_ip_address.keyword', size: 250 },
           aggs: {
             total_vol: { sum: { field: 'message_count' } },
             passed_vol: {
@@ -2323,7 +2333,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
           }
         },
         countries: {
-          terms: { field: 'source_country.keyword', size: 100 },
+          terms: { field: 'source_country.keyword', size: 250 },
           aggs: {
             total_vol: { sum: { field: 'message_count' } },
             passed_vol: {
@@ -2404,7 +2414,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
           totalVolume: hVol,
           compliantVolume: hPass,
           complianceRate: hVol > 0 ? Number(((hPass / hVol) * 100).toFixed(1)) : 0,
-          isCompliant: hPass === hVol,
+          isCompliant: hVol > 0 && ((hPass / hVol) >= 0.95 || hPass === hVol),
           spfAligned: hSpf > 0,
           dkimAligned: hDkim > 0,
           spfRate: hVol > 0 ? Number(((hSpf / hVol) * 100).toFixed(1)) : 0,
@@ -2414,12 +2424,29 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
 
       // Source Category classification tag:
       // "DMARC compatible sources" | "Forwarded" | "Failed"
+      const compRate = vol > 0 ? (pass / vol) * 100 : 0;
+      const sRate = vol > 0 ? (spf / vol) * 100 : 0;
+      const dRate = vol > 0 ? (dkim / vol) * 100 : 0;
+
       let categoryTag = 'Failed';
-      if (pass === vol && vol > 0) {
-        categoryTag = 'DMARC compatible sources';
-      } else if (pass > 0 && pass < vol) {
-        categoryTag = 'Forwarded';
-      } else if (pass === 0 && vol > 0) {
+      if (compRate >= 70.0) {
+        // High compliance rate (>=70%)
+        // If SPF is heavily unaligned (<20%) but DKIM passes (>=70%), it's an intermediary forwarder
+        if (sRate < 20.0 && dRate >= 70.0) {
+          categoryTag = 'Forwarded';
+        } else {
+          categoryTag = 'DMARC compatible sources';
+        }
+      } else if (compRate >= 20.0) {
+        // Moderate compliance (20% - 69.9%)
+        // If DKIM survives while SPF fails, it represents forwarded mail
+        if (dRate > sRate) {
+          categoryTag = 'Forwarded';
+        } else {
+          categoryTag = 'DMARC compatible sources';
+        }
+      } else {
+        // Low compliance (<20%) or 0% pass -> Failed / Shadow IT / Spoofer
         categoryTag = 'Failed';
       }
 
@@ -2590,6 +2617,7 @@ app.get('/api/reports/aggregate-views', authenticateToken, enforceDomainAccess, 
         passedVolume,
         failedVolume,
         compliantVolume: passedVolume,
+        compatibleVolume: Math.max(0, passedVolume - forwarded),
         nonCompliantVolume: nonCompliant,
         forwardedVolume: forwarded,
         quarantinedVolume: quarantined,
@@ -2723,7 +2751,8 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
       date_to,
       disposition,
       org_name,
-      reporter_org
+      reporter_org,
+      ai_summary
     } = req.body;
     
     // Validate domain
@@ -2758,6 +2787,20 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
       args.push('--logo', targetLogo);
     }
 
+    let aiSummaryTmpFile = null;
+    if (typeof ai_summary === 'string' && ai_summary.trim().length > 0) {
+      try {
+        if (!fs.existsSync(REPORTS_OUTPUT_DIR)) {
+          fs.mkdirSync(REPORTS_OUTPUT_DIR, { recursive: true });
+        }
+        aiSummaryTmpFile = path.resolve(REPORTS_OUTPUT_DIR, `ai_summary_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.txt`);
+        fs.writeFileSync(aiSummaryTmpFile, ai_summary.trim(), 'utf8');
+        args.push('--ai-summary-file', aiSummaryTmpFile);
+      } catch (writeErr) {
+        console.warn('Failed to write temporary ai_summary file:', writeErr.message);
+      }
+    }
+
     const reportLang = (req.body.language || req.user.language || 'en').trim().toLowerCase();
     if (['en', 'es'].includes(reportLang)) {
       args.push('--language', reportLang);
@@ -2782,6 +2825,15 @@ app.post('/api/reports/generate', authenticateToken, enforceDomainAccess, async 
     }
 
     execFile(getPythonBinary(), args, { timeout: 60000, env: process.env }, (error, stdout, stderr) => {
+      // Clean up temporary AI summary file
+      if (aiSummaryTmpFile) {
+        try {
+          if (fs.existsSync(aiSummaryTmpFile)) fs.unlinkSync(aiSummaryTmpFile);
+        } catch (cleanupErr) {
+          console.warn('Failed to remove temp ai summary file:', cleanupErr.message);
+        }
+      }
+
       if (error) {
         console.error('Report generation error:', error, stderr);
         return res.status(500).json({ error: 'Report generation execution failed.' });
@@ -3265,6 +3317,586 @@ app.get('/api/admin/smtp/audit-logs', authenticateToken, requireRole('admin'), a
     res.json(logs);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch audit logs.' });
+  }
+});
+
+// ==========================================
+// FEATURE: AI Intelligence & LLM Control Panel
+// ==========================================
+
+// 1. Get AI Settings (Admin)
+app.get('/api/admin/ai-settings', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const settings = db.getAiSettings({ includeDecrypted: false });
+    res.json(settings);
+  } catch (err) {
+    console.error('Error fetching AI settings:', err);
+    res.status(500).json({ error: 'Failed to retrieve AI settings.' });
+  }
+});
+
+// 2. Save AI Settings (Admin)
+app.put('/api/admin/ai-settings', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const {
+      enabled,
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+      temperature,
+      maxTokens,
+      featureLogRca,
+      featureExecutiveSummary,
+      featureCopilot
+    } = req.body;
+
+    const saved = db.saveAiSettings({
+      enabled: Boolean(enabled),
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+      temperature,
+      maxTokens,
+      featureLogRca,
+      featureExecutiveSummary,
+      featureCopilot
+    }, {
+      id: req.user.id,
+      username: req.user.username,
+      ipAddress: req.ip
+    });
+
+    res.json({
+      status: 'success',
+      message: 'AI Intelligence settings saved successfully.',
+      settings: saved
+    });
+  } catch (err) {
+    console.error('Error saving AI settings:', err);
+    res.status(500).json({ error: err.message || 'Failed to save AI settings.' });
+  }
+});
+
+// 3. Test AI Connection (Admin)
+app.post('/api/admin/ai-settings/test', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { provider, model, apiKey, baseUrl } = req.body;
+    let testKey = apiKey;
+    if (!testKey || testKey === '••••••••' || testKey.includes('•••')) {
+      const current = db.getAiSettings({ includeDecrypted: true });
+      testKey = current.providers?.[provider]?.apiKey || (current.provider === provider ? current.apiKey : '');
+    }
+
+    if (!testKey && provider !== 'custom') {
+      return res.status(400).json({ status: 'error', error: `API Key is required to test ${provider || 'this provider'}.` });
+    }
+
+    const testRes = await testAiConnection({
+      provider,
+      model,
+      apiKey: testKey,
+      baseUrl
+    });
+
+    res.json({
+      status: 'success',
+      ...testRes
+    });
+  } catch (err) {
+    console.error('AI connection test error:', err.message);
+    res.status(400).json({
+      status: 'error',
+      error: err.message || 'AI Connection probe failed.'
+    });
+  }
+});
+
+// 4. Public/Client AI Feature Status (Authenticated)
+app.get('/api/ai/status', authenticateToken, async (req, res) => {
+  try {
+    const settings = db.getAiSettings({ includeDecrypted: false });
+    res.json({
+      enabled: Boolean(settings.enabled && settings.hasApiKey),
+      configured: Boolean(settings.hasApiKey),
+      provider: settings.provider,
+      model: settings.model,
+      features: {
+        logRca: settings.featureLogRca,
+        executiveSummary: settings.featureExecutiveSummary,
+        copilot: settings.featureCopilot
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve AI status.' });
+  }
+});
+
+// 5. 1-Click Forensic Log RCA
+app.post('/api/ai/diagnose-log', authenticateToken, async (req, res) => {
+  try {
+    const { log } = req.body;
+    if (!log || typeof log !== 'object') {
+      return res.status(400).json({ error: 'Valid DMARC log record object is required for AI diagnosis.' });
+    }
+
+    const settings = db.getAiSettings({ includeDecrypted: false });
+    if (!settings.enabled || !settings.hasApiKey) {
+      return res.status(403).json({
+        error: 'AI Intelligence is disabled or not configured. Please enable it in Admin Settings.'
+      });
+    }
+    if (!settings.featureLogRca) {
+      return res.status(403).json({
+        error: '1-Click Log RCA feature is disabled in Admin AI Settings.'
+      });
+    }
+
+    const diagnosis = await diagnoseLogRecord(log);
+    res.json(diagnosis);
+  } catch (err) {
+    console.error('AI Log Diagnosis error:', err);
+    res.status(500).json({ error: err.message || 'AI Log Diagnosis failed.' });
+  }
+});
+
+// 6. Generate Executive Report AI Summary
+app.post('/api/ai/executive-summary', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const { metrics } = req.body;
+    if (!metrics) {
+      return res.status(400).json({ error: 'Metrics payload is required.' });
+    }
+
+    const settings = db.getAiSettings({ includeDecrypted: false });
+    if (!settings.enabled || !settings.hasApiKey) {
+      return res.status(403).json({
+        error: 'AI Intelligence is disabled or not configured. Please enable it in Admin Settings.'
+      });
+    }
+    if (!settings.featureExecutiveSummary) {
+      return res.status(403).json({
+        error: 'Executive Report AI Summary feature is disabled in Admin AI Settings.'
+      });
+    }
+
+    const result = await generateExecutiveSummary(metrics);
+    res.json(result);
+  } catch (err) {
+    console.error('Executive AI Summary error:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate AI executive summary.' });
+  }
+});
+
+// ==========================================
+// Phase 2: Telemetry Copilot & Shadow IT APIs
+// ==========================================
+
+// 7. Telemetry Copilot: List Sessions
+app.get('/api/ai/copilot/sessions', authenticateToken, async (req, res) => {
+  try {
+    const sessions = db.listCopilotSessions(req.user.id);
+    res.json({ sessions });
+  } catch (err) {
+    console.error('List Copilot Sessions error:', err);
+    res.status(500).json({ error: 'Failed to retrieve Copilot sessions.' });
+  }
+});
+
+// 8. Telemetry Copilot: Create Session
+app.post('/api/ai/copilot/sessions', authenticateToken, async (req, res) => {
+  try {
+    const { title = 'New Investigation', domain_scope = 'all' } = req.body;
+    const session = db.createCopilotSession({
+      userId: req.user.id,
+      title,
+      domainScope: domain_scope
+    });
+    res.json(session);
+  } catch (err) {
+    console.error('Create Copilot Session error:', err);
+    res.status(500).json({ error: 'Failed to create Copilot session.' });
+  }
+});
+
+// 9. Telemetry Copilot: Get Session Messages
+app.get('/api/ai/copilot/sessions/:id', authenticateToken, async (req, res) => {
+  try {
+    const messages = db.getCopilotMessages(req.params.id, req.user.id);
+    if (!messages) {
+      return res.status(404).json({ error: 'Session not found or access denied.' });
+    }
+    res.json({ sessionId: req.params.id, messages });
+  } catch (err) {
+    console.error('Get Copilot Messages error:', err);
+    res.status(500).json({ error: 'Failed to fetch session messages.' });
+  }
+});
+
+// 10. Telemetry Copilot: Delete Session
+app.delete('/api/ai/copilot/sessions/:id', authenticateToken, async (req, res) => {
+  try {
+    db.deleteCopilotSession(req.params.id, req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete Copilot Session error:', err);
+    res.status(500).json({ error: 'Failed to delete session.' });
+  }
+});
+
+// 11. Telemetry Copilot: Conversational Natural Language Query
+app.post('/api/ai/copilot/query', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const { prompt, session_id, domain = 'all', time_window = 'last_30_days' } = req.body;
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+      return res.status(400).json({ error: 'Valid prompt string is required.' });
+    }
+
+    const settings = db.getAiSettings({ includeDecrypted: false });
+    if (!settings.enabled || !settings.hasApiKey) {
+      return res.status(403).json({
+        error: 'AI Intelligence is disabled or not configured. Please configure an API key in Admin Settings.'
+      });
+    }
+    if (!settings.featureCopilot) {
+      return res.status(403).json({
+        error: 'Telemetry Copilot feature is currently disabled in Admin AI Settings.'
+      });
+    }
+
+    // Ensure session
+    let activeSessionId = session_id;
+    if (!activeSessionId) {
+      const firstLine = prompt.trim().split('\n')[0].slice(0, 40);
+      const newSession = db.createCopilotSession({
+        userId: req.user.id,
+        title: firstLine || 'Investigation',
+        domainScope: domain
+      });
+      activeSessionId = newSession.id;
+    }
+
+    // Load recent conversation history
+    const prevMessages = db.getCopilotMessages(activeSessionId, req.user.id) || [];
+
+    // Fetch live OpenSearch telemetry context for grounding
+    const filterQuery = buildFilterQuery({ domain: domain !== 'all' ? domain : undefined }, req.allowedDomains);
+    let telemetryContext = {
+      domainScope: domain,
+      timeWindow: time_window,
+      totalMessages: 0,
+      passRate: 0,
+      failedMessages: 0,
+      currentPolicy: 'p=none',
+      topSenders: [],
+      recentThreats: []
+    };
+
+    try {
+      const summaryQuery = {
+        size: 0,
+        query: filterQuery,
+        aggs: {
+          total_vol: { sum: { field: 'message_count' } },
+          passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+          failed_vol: { filter: { term: { passed_dmarc: false } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+          dispositions: { terms: { field: 'disposition.keyword', size: 5 }, aggs: { vol: { sum: { field: 'message_count' } } } },
+          top_senders: {
+            terms: { field: 'source_name.keyword', size: 5 },
+            aggs: {
+              vol: { sum: { field: 'message_count' } },
+              passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } }
+            }
+          }
+        }
+      };
+
+      const osData = await queryOpenSearch('_search', summaryQuery);
+      if (osData?.aggregations) {
+        const aggs = osData.aggregations;
+        const total = aggs.total_vol?.value || 0;
+        const passed = aggs.passed_vol?.vol?.value || 0;
+        const failed = aggs.failed_vol?.vol?.value || 0;
+
+        telemetryContext.totalMessages = total;
+        telemetryContext.passedMessages = passed;
+        telemetryContext.failedMessages = failed;
+        telemetryContext.passRate = total > 0 ? Number(((passed / total) * 100).toFixed(1)) : 0;
+        telemetryContext.dispositions = (aggs.dispositions?.buckets || []).map(b => ({ disposition: b.key, count: b.vol?.value || 0 }));
+        telemetryContext.topSenders = (aggs.top_senders?.buckets || []).map(b => ({
+          name: b.key,
+          volume: b.vol?.value || 0,
+          passRate: (b.vol?.value || 0) > 0 ? Number((((b.passed_vol?.vol?.value || 0) / (b.vol?.value || 1)) * 100).toFixed(1)) : 0
+        }));
+      }
+    } catch (osErr) {
+      console.warn('Telemetry Copilot context gathering error (continuing with degraded context):', osErr.message);
+    }
+
+    // Execute LLM completion with grounded telemetry
+    const result = await runTelemetryCopilot({
+      prompt: prompt.trim(),
+      domainScope: domain,
+      timeWindow: time_window,
+      conversationHistory: prevMessages,
+      telemetryContext
+    });
+
+    // Save user message and assistant answer
+    db.addCopilotMessage({
+      sessionId: activeSessionId,
+      role: 'user',
+      content: prompt.trim()
+    });
+
+    const assistantMsg = db.addCopilotMessage({
+      sessionId: activeSessionId,
+      role: 'assistant',
+      content: result.text,
+      meta: {
+        model: result.meta?.model,
+        provider: result.meta?.provider,
+        latencyMs: result.meta?.latencyMs,
+        suggestedQueries: result.suggestedQueries,
+        dataSummary: result.dataSummary
+      }
+    });
+
+    res.json({
+      sessionId: activeSessionId,
+      messageId: assistantMsg.id,
+      ...result
+    });
+  } catch (err) {
+    console.error('Telemetry Copilot query error:', err);
+    res.status(500).json({ error: err.message || 'Telemetry Copilot query execution failed.' });
+  }
+});
+
+// 12. Shadow IT Discovery & SaaS Vendor Classifier
+app.get('/api/ai/shadow-it', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const filterQuery = buildFilterQuery(req.query, req.allowedDomains);
+
+    // Query OpenSearch for all aggregated sending sources
+    const query = {
+      size: 0,
+      query: filterQuery,
+      aggs: {
+        sources: {
+          terms: { field: 'source_name.keyword', size: 60 },
+          aggs: {
+            total_vol: { sum: { field: 'message_count' } },
+            passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            spf_vol: { filter: { term: { spf_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            dkim_vol: { filter: { term: { dkim_aligned: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            source_type: { terms: { field: 'source_type.keyword', size: 1 } },
+            base_domain: { terms: { field: 'source_base_domain.keyword', size: 1 } },
+            as_name: { terms: { field: 'source_as_name.keyword', size: 1 } },
+            top_hosts: {
+              terms: { field: 'source_ip_address.keyword', size: 15 },
+              aggs: {
+                vol: { sum: { field: 'message_count' } },
+                passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+                ptr: { terms: { field: 'source_reverse_dns.keyword', size: 1 } },
+                country: { terms: { field: 'source_country.keyword', size: 1 } }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    let rawSources = [];
+    try {
+      const data = await queryOpenSearch('_search', query);
+      const buckets = data?.aggregations?.sources?.buckets || [];
+      rawSources = buckets.map(b => {
+        const vol = b.total_vol?.value || 0;
+        const pass = b.passed_vol?.vol?.value || 0;
+        const spf = b.spf_vol?.vol?.value || 0;
+        const dkim = b.dkim_vol?.vol?.value || 0;
+        const baseDom = b.base_domain?.buckets?.[0]?.key || '';
+        const asName = b.as_name?.buckets?.[0]?.key || '';
+        const hosts = (b.top_hosts?.buckets || []).map(hb => ({
+          ip: hb.key,
+          hostname: hb.ptr?.buckets?.[0]?.key || 'No PTR Record',
+          country: hb.country?.buckets?.[0]?.key || 'US',
+          volume: hb.vol?.value || 0,
+          compliantVolume: hb.passed_vol?.vol?.value || 0
+        }));
+
+        return {
+          sourceName: b.key || 'Unknown',
+          baseDomain: baseDom,
+          asName: asName,
+          totalVolume: vol,
+          compliantVolume: pass,
+          spfAlignedVolume: spf,
+          dkimAlignedVolume: dkim,
+          nestedHosts: hosts
+        };
+      });
+    } catch (osErr) {
+      console.warn('OpenSearch aggregate error for shadow-it:', osErr.message);
+    }
+
+    const analysis = await analyzeShadowItAndVendors({
+      sources: rawSources,
+      domainScope: req.query.domain || 'all'
+    });
+
+    res.json(analysis);
+  } catch (err) {
+    console.error('Shadow IT analysis error:', err);
+    res.status(500).json({ error: err.message || 'Failed to analyze Shadow IT vendors.' });
+  }
+});
+
+// 13. Phase 3: AI Policy Enforcement Advisor ("What-If" Impact Simulator)
+app.post('/api/ai/policy-simulator', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const { domain = 'all', targetPolicy = 'reject', targetPct = 100 } = req.body || {};
+    const queryDomain = domain !== 'all' ? domain : req.query.domain;
+    const filterQuery = buildFilterQuery({ domain: queryDomain }, req.allowedDomains);
+
+    // Aggregate sources and volumes
+    const query = {
+      size: 0,
+      query: filterQuery,
+      aggs: {
+        total_vol: { sum: { field: 'message_count' } },
+        passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+        failed_vol: { filter: { term: { passed_dmarc: false } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+        sources: {
+          terms: { field: 'source_name.keyword', size: 60 },
+          aggs: {
+            vol: { sum: { field: 'message_count' } },
+            passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            base_domain: { terms: { field: 'source_base_domain.keyword', size: 1 } },
+            as_name: { terms: { field: 'source_as_name.keyword', size: 1 } }
+          }
+        }
+      }
+    };
+
+    let totalMessages = 0;
+    let passedMessages = 0;
+    let failedMessages = 0;
+    let sources = [];
+
+    try {
+      const data = await queryOpenSearch('_search', query);
+      totalMessages = data?.aggregations?.total_vol?.value || 0;
+      passedMessages = data?.aggregations?.passed_vol?.vol?.value || 0;
+      failedMessages = data?.aggregations?.failed_vol?.vol?.value || 0;
+
+      sources = (data?.aggregations?.sources?.buckets || []).map(b => ({
+        sourceName: b.key,
+        baseDomain: b.base_domain?.buckets?.[0]?.key || '',
+        asName: b.as_name?.buckets?.[0]?.key || '',
+        totalVolume: b.vol?.value || 0,
+        compliantVolume: b.passed_vol?.vol?.value || 0
+      }));
+    } catch (osErr) {
+      console.warn('OpenSearch error gathering simulator telemetry:', osErr.message);
+    }
+
+    const simulation = await simulatePolicyEnforcement({
+      domainScope: domain,
+      targetPolicy,
+      targetPct: Number(targetPct) || 100,
+      telemetryData: {
+        totalMessages,
+        passedMessages,
+        failedMessages,
+        sources
+      }
+    });
+
+    res.json(simulation);
+  } catch (err) {
+    console.error('Policy simulator error:', err);
+    res.status(500).json({ error: err.message || 'Failed to simulate policy enforcement.' });
+  }
+});
+
+// 14. Phase 3: Predictive Anomaly Detection Engine
+app.get('/api/ai/predictive-anomalies', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const filterQuery = buildFilterQuery(req.query, req.allowedDomains);
+
+    const query = {
+      size: 0,
+      query: filterQuery,
+      aggs: {
+        total_vol: { sum: { field: 'message_count' } },
+        sources: {
+          terms: { field: 'source_name.keyword', size: 40 },
+          aggs: {
+            vol: { sum: { field: 'message_count' } },
+            passed_vol: { filter: { term: { passed_dmarc: true } }, aggs: { vol: { sum: { field: 'message_count' } } } },
+            base_domain: { terms: { field: 'source_base_domain.keyword', size: 1 } },
+            hosts: {
+              terms: { field: 'source_ip_address.keyword', size: 10 },
+              aggs: {
+                vol: { sum: { field: 'message_count' } },
+                country: { terms: { field: 'source_country.keyword', size: 1 } },
+                ptr: { terms: { field: 'source_reverse_dns.keyword', size: 1 } }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    let totalMessages = 0;
+    let sources = [];
+
+    try {
+      const data = await queryOpenSearch('_search', query);
+      totalMessages = data?.aggregations?.total_vol?.value || 0;
+      sources = (data?.aggregations?.sources?.buckets || []).map(b => ({
+        sourceName: b.key,
+        baseDomain: b.base_domain?.buckets?.[0]?.key || '',
+        totalVolume: b.vol?.value || 0,
+        compliantVolume: b.passed_vol?.vol?.value || 0,
+        nestedHosts: (b.hosts?.buckets || []).map(hb => ({
+          ip: hb.key,
+          volume: hb.vol?.value || 0,
+          country: hb.country?.buckets?.[0]?.key || 'US',
+          hostname: hb.ptr?.buckets?.[0]?.key || ''
+        }))
+      }));
+    } catch (osErr) {
+      console.warn('OpenSearch error gathering predictive anomalies:', osErr.message);
+    }
+
+    const anomalies = await detectPredictiveAnomalies({
+      domainScope: req.query.domain || 'all',
+      telemetryData: {
+        totalMessages,
+        sources
+      }
+    });
+
+    res.json(anomalies);
+  } catch (err) {
+    console.error('Predictive anomaly detection error:', err);
+    res.status(500).json({ error: err.message || 'Failed to detect predictive anomalies.' });
+  }
+});
+
+// 15. Phase 3: SPF & BIMI Smart Optimizer
+app.post('/api/ai/spf-bimi-optimizer', authenticateToken, enforceDomainAccess, async (req, res) => {
+  try {
+    const { domain = 'voxera.net', currentSpf = '', logoUrl = '' } = req.body || {};
+    const result = optimizeSpfAndBimi({ domain, currentSpf, logoUrl });
+    res.json({ status: 'success', ...result });
+  } catch (err) {
+    console.error('SPF & BIMI optimizer error:', err);
+    res.status(500).json({ error: err.message || 'Failed to optimize SPF and BIMI.' });
   }
 });
 

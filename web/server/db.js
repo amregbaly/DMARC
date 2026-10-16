@@ -247,6 +247,51 @@ export function initDb() {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS ai_settings (
+      id TEXT PRIMARY KEY DEFAULT 'default',
+      enabled INTEGER NOT NULL DEFAULT 0,
+      provider TEXT NOT NULL DEFAULT 'google',
+      model TEXT NOT NULL DEFAULT 'gemini-1.5-flash',
+      api_key_encrypted TEXT,
+      base_url TEXT DEFAULT '',
+      temperature REAL DEFAULT 0.2,
+      max_tokens INTEGER DEFAULT 2048,
+      feature_log_rca INTEGER NOT NULL DEFAULT 1,
+      feature_executive_summary INTEGER NOT NULL DEFAULT 1,
+      feature_copilot INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_provider_keys (
+      provider TEXT PRIMARY KEY,
+      model TEXT,
+      api_key_encrypted TEXT,
+      base_url TEXT DEFAULT '',
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_copilot_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      domain_scope TEXT DEFAULT 'all',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_copilot_messages (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      meta_json TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_copilot_sessions_user ON ai_copilot_sessions(user_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_copilot_messages_session ON ai_copilot_messages(session_id, created_at);
+
     CREATE TABLE IF NOT EXISTS audit_logs (
       id TEXT PRIMARY KEY,
       user_id TEXT,
@@ -932,6 +977,210 @@ export function saveSmtpSettings(settings, actor = {}) {
   });
 
   return getSmtpSettings({ includeDecrypted: false });
+}
+
+export function getAiSettings({ includeDecrypted = false } = {}) {
+  const row = db.prepare('SELECT * FROM ai_settings WHERE id = ?').get('default');
+
+  // Load per-provider saved keys
+  let providerRows = [];
+  try {
+    providerRows = db.prepare('SELECT * FROM ai_provider_keys').all();
+  } catch (e) {
+    providerRows = [];
+  }
+
+  const providers = {};
+  for (const pr of providerRows) {
+    let keyVal = '';
+    if (pr.api_key_encrypted) {
+      if (includeDecrypted) {
+        try {
+          keyVal = decrypt(pr.api_key_encrypted);
+        } catch (e) {
+          keyVal = '';
+        }
+      } else {
+        keyVal = maskSecret(pr.api_key_encrypted);
+      }
+    }
+    providers[pr.provider] = {
+      hasKey: Boolean(pr.api_key_encrypted),
+      apiKey: keyVal,
+      model: pr.model,
+      baseUrl: pr.base_url || '',
+      updatedAt: pr.updated_at
+    };
+  }
+
+  if (!row) {
+    return {
+      enabled: false,
+      provider: 'google',
+      model: 'gemini-1.5-flash',
+      apiKey: '',
+      hasApiKey: false,
+      baseUrl: '',
+      temperature: 0.2,
+      maxTokens: 2048,
+      featureLogRca: true,
+      featureExecutiveSummary: true,
+      featureCopilot: true,
+      is_configured: false,
+      providers,
+      updated_at: null
+    };
+  }
+
+  const currentProvider = row.provider || 'google';
+  let activeEncryptedKey = row.api_key_encrypted;
+
+  // Fallback / sync with ai_provider_keys
+  if (!activeEncryptedKey && providers[currentProvider]?.hasKey) {
+    const pRow = providerRows.find(x => x.provider === currentProvider);
+    if (pRow?.api_key_encrypted) {
+      activeEncryptedKey = pRow.api_key_encrypted;
+    }
+  }
+
+  const hasApiKey = Boolean(activeEncryptedKey);
+  let apiKey = '';
+  if (hasApiKey) {
+    if (includeDecrypted) {
+      try {
+        apiKey = decrypt(activeEncryptedKey);
+      } catch (e) {
+        apiKey = '';
+      }
+    } else {
+      apiKey = maskSecret(activeEncryptedKey);
+    }
+  }
+
+  return {
+    enabled: Boolean(row.enabled),
+    provider: currentProvider,
+    model: row.model || 'gemini-1.5-flash',
+    apiKey,
+    hasApiKey,
+    baseUrl: row.base_url || '',
+    temperature: typeof row.temperature === 'number' ? row.temperature : 0.2,
+    maxTokens: row.max_tokens || 2048,
+    featureLogRca: Boolean(row.feature_log_rca !== 0),
+    featureExecutiveSummary: Boolean(row.feature_executive_summary !== 0),
+    featureCopilot: Boolean(row.feature_copilot !== 0),
+    is_configured: Boolean(hasApiKey),
+    providers,
+    updated_at: row.updated_at
+  };
+}
+
+export function saveAiSettings(settings, actor = {}) {
+  const existing = db.prepare('SELECT * FROM ai_settings WHERE id = ?').get('default');
+  const now = new Date().toISOString();
+
+  const cleanProvider = (settings.provider || 'google').trim().toLowerCase();
+  const cleanModel = (settings.model || '').trim();
+  const cleanBaseUrl = (settings.baseUrl || '').trim();
+
+  // Check if existing provider row in ai_provider_keys
+  let existingProviderKey = null;
+  try {
+    existingProviderKey = db.prepare('SELECT * FROM ai_provider_keys WHERE provider = ?').get(cleanProvider);
+  } catch (e) {}
+
+  let apiKeyEncrypted = '';
+  if (settings.apiKey && settings.apiKey !== '••••••••' && !settings.apiKey.includes('•••')) {
+    apiKeyEncrypted = encrypt(settings.apiKey.trim());
+  } else if (existingProviderKey?.api_key_encrypted) {
+    apiKeyEncrypted = existingProviderKey.api_key_encrypted;
+  } else if (existing && existing.provider === cleanProvider) {
+    apiKeyEncrypted = existing.api_key_encrypted;
+  }
+
+  // Upsert into ai_provider_keys
+  try {
+    db.prepare(`
+      INSERT INTO ai_provider_keys (provider, model, api_key_encrypted, base_url, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(provider) DO UPDATE SET
+        model = excluded.model,
+        api_key_encrypted = CASE WHEN excluded.api_key_encrypted != '' THEN excluded.api_key_encrypted ELSE ai_provider_keys.api_key_encrypted END,
+        base_url = excluded.base_url,
+        updated_at = excluded.updated_at
+    `).run(cleanProvider, cleanModel, apiKeyEncrypted, cleanBaseUrl, now);
+  } catch (e) {
+    console.error('Failed to update ai_provider_keys:', e.message);
+  }
+
+  const cleanEnabled = settings.enabled ? 1 : 0;
+  const cleanTemp = typeof settings.temperature === 'number' ? Math.max(0, Math.min(2, settings.temperature)) : 0.2;
+  const cleanMaxTokens = parseInt(settings.maxTokens, 10) || 2048;
+  const cleanFeatureRca = settings.featureLogRca !== false ? 1 : 0;
+  const cleanFeatureSummary = settings.featureExecutiveSummary !== false ? 1 : 0;
+  const cleanFeatureCopilot = settings.featureCopilot !== false ? 1 : 0;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE ai_settings
+      SET enabled = ?, provider = ?, model = ?, api_key_encrypted = ?,
+          base_url = ?, temperature = ?, max_tokens = ?,
+          feature_log_rca = ?, feature_executive_summary = ?, feature_copilot = ?,
+          updated_at = ?
+      WHERE id = 'default'
+    `).run(
+      cleanEnabled,
+      cleanProvider,
+      cleanModel,
+      apiKeyEncrypted,
+      cleanBaseUrl,
+      cleanTemp,
+      cleanMaxTokens,
+      cleanFeatureRca,
+      cleanFeatureSummary,
+      cleanFeatureCopilot,
+      now
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO ai_settings (
+        id, enabled, provider, model, api_key_encrypted,
+        base_url, temperature, max_tokens,
+        feature_log_rca, feature_executive_summary, feature_copilot,
+        created_at, updated_at
+      )
+      VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      cleanEnabled,
+      cleanProvider,
+      cleanModel,
+      apiKeyEncrypted,
+      cleanBaseUrl,
+      cleanTemp,
+      cleanMaxTokens,
+      cleanFeatureRca,
+      cleanFeatureSummary,
+      cleanFeatureCopilot,
+      now,
+      now
+    );
+  }
+
+  addAuditLog({
+    userId: actor.id || null,
+    username: actor.username || 'system',
+    action: 'ai.settings_update',
+    details: {
+      enabled: Boolean(cleanEnabled),
+      provider: cleanProvider,
+      model: cleanModel,
+      base_url: cleanBaseUrl,
+      api_key_updated: Boolean(settings.apiKey && settings.apiKey !== '••••••••')
+    },
+    ipAddress: actor.ipAddress || null
+  });
+
+  return getAiSettings({ includeDecrypted: false });
 }
 
 export function addAuditLog({ userId, username, action, details = {}, ipAddress = null }) {
@@ -1623,6 +1872,99 @@ export function resetDefaultTheme(id) {
   return getThemeById(target.id);
 }
 
+// ==========================================
+// AI Telemetry Copilot Sessions & Messages
+// ==========================================
+
+export function listCopilotSessions(userId) {
+  return db.prepare(`
+    SELECT * FROM ai_copilot_sessions
+    WHERE user_id = ?
+    ORDER BY updated_at DESC
+  `).all(userId).map(s => ({
+    id: s.id,
+    userId: s.user_id,
+    title: s.title,
+    domainScope: s.domain_scope,
+    createdAt: s.created_at,
+    updatedAt: s.updated_at
+  }));
+}
+
+export function createCopilotSession({ id, userId, title, domainScope = 'all' }) {
+  const sessionId = id || crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO ai_copilot_sessions (id, user_id, title, domain_scope, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(sessionId, userId, title || 'New Investigation', domainScope, now, now);
+
+  return {
+    id: sessionId,
+    userId,
+    title: title || 'New Investigation',
+    domainScope,
+    domain_scope: domainScope,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+export function getCopilotMessages(sessionId, userId) {
+  if (userId) {
+    const session = db.prepare('SELECT * FROM ai_copilot_sessions WHERE id = ? AND user_id = ?').get(sessionId, userId);
+    if (!session) return null;
+  }
+
+  const rows = db.prepare(`
+    SELECT * FROM ai_copilot_messages
+    WHERE session_id = ?
+    ORDER BY created_at ASC
+  `).all(sessionId);
+
+  return rows.map(r => ({
+    id: r.id,
+    sessionId: r.session_id,
+    role: r.role,
+    content: r.content,
+    meta: r.meta_json ? JSON.parse(r.meta_json) : null,
+    createdAt: r.created_at
+  }));
+}
+
+export function addCopilotMessage({ id, sessionId, role, content, meta = null }) {
+  const messageId = id || crypto.randomUUID();
+  const now = new Date().toISOString();
+  const metaJson = meta ? JSON.stringify(meta) : null;
+
+  db.prepare(`
+    INSERT INTO ai_copilot_messages (id, session_id, role, content, meta_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(messageId, sessionId, role, content, metaJson, now);
+
+  db.prepare('UPDATE ai_copilot_sessions SET updated_at = ? WHERE id = ?').run(now, sessionId);
+
+  return {
+    id: messageId,
+    sessionId,
+    role,
+    content,
+    meta,
+    createdAt: now
+  };
+}
+
+export function updateCopilotSessionTitle(sessionId, userId, title) {
+  db.prepare('UPDATE ai_copilot_sessions SET title = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+    .run(title, new Date().toISOString(), sessionId, userId);
+}
+
+export function deleteCopilotSession(sessionId, userId) {
+  db.prepare('DELETE FROM ai_copilot_messages WHERE session_id = ?').run(sessionId);
+  db.prepare('DELETE FROM ai_copilot_sessions WHERE id = ? AND user_id = ?').run(sessionId, userId);
+  return { success: true };
+}
+
 export default {
   initDb,
   isValidTheme,
@@ -1654,6 +1996,8 @@ export default {
   deleteReportSchedule,
   getSmtpSettings,
   saveSmtpSettings,
+  getAiSettings,
+  saveAiSettings,
   addAuditLog,
   getAuditLogs,
   enqueueEmail,
@@ -1673,6 +2017,12 @@ export default {
   getAlertHistory,
   addAlertDigestItem,
   getPendingAlertDigests,
-  markAlertDigestsSent
+  markAlertDigestsSent,
+  listCopilotSessions,
+  createCopilotSession,
+  getCopilotMessages,
+  addCopilotMessage,
+  updateCopilotSessionTitle,
+  deleteCopilotSession
 };
 

@@ -23,7 +23,9 @@ import {
   Palette,
   Compass,
   BellRing,
-  Mail
+  Mail,
+  Radar,
+  Sparkles
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -58,8 +60,11 @@ export default function TopBar({
     policies: { label: t('nav.policies', 'Policies & Readiness'), icon: Sliders },
     reports: { label: t('nav.reports', 'Reports'), icon: FileText },
     records: { label: t('nav.records', 'Log Explorer'), icon: Search },
+    shadow_it: { label: t('nav.shadowIt', 'Shadow IT Discovery'), icon: Radar },
     users: { label: t('nav.users', 'User Access'), icon: Users },
-    smtp: { label: t('nav.smtp', 'Email / SMTP Settings'), icon: Mail }
+    smtp: { label: t('nav.smtp', 'Email / SMTP Settings'), icon: Mail },
+    themes: { label: t('nav.themes', 'Theme Studio'), icon: Palette },
+    ai: { label: t('nav.aiSettings', 'AI Intelligence'), icon: Sparkles }
   };
 
   const currentTab = tabMeta[activeTab] || { label: activeTab, icon: Shield };

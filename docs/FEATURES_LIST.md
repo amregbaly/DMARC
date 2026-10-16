@@ -357,3 +357,60 @@ Comprehensive, rigorous, and visually clear **Domain Analyzer**:
   * Automation script (`opensearch/setup-opensearch-readonly.sh`) to provision read-only users.
 * **Synthetic Test Data Generator (`scripts/seed-test-data.sh`)**:
   * Bulk-indexes synthetic DMARC records across multiple domains, sending IPs, and authentication scenarios for immediate testing and verification.
+
+---
+
+## 15. AI Intelligence & Automated Forensics Engine
+
+*Detailed technical specifications, architecture blueprints, and API models are documented in [docs/AI_INTEGRATION_ROADMAP.md](file:///home/amr/dev/dmarc/docs/AI_INTEGRATION_ROADMAP.md).*
+
+* **AI Intelligence Control Panel (Admin Section)**:
+  * **Master ON/OFF Control**: Global toggle to activate or deactivate AI features across the platform.
+  * **Multi-Provider LLM Gateway**: Full support for switching between 5 providers:
+    1. **Google Gemini** (`gemini-1.5-flash`, `gemini-1.5-pro`, `gemini-2.0-flash`)
+    2. **OpenAI** (`gpt-4o-mini`, `gpt-4o`, `gpt-3.5-turbo`)
+    3. **Anthropic Claude** (`claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`)
+    4. **OpenRouter** (`openrouter.ai` multi-model gateway routing across 200+ foundation models)
+    5. **Self-Hosted / Air-Gapped / Custom** (Ollama, vLLM, or LocalAI OpenAI-compatible endpoints)
+  * **Per-Provider Encrypted Key Storage**: API keys are securely stored and encrypted at rest with AES-256-GCM. Switching providers preserves saved credentials.
+  * **Real-Time Connectivity Probing**: Live "Test Connection" button testing latency (`⚡ ms`) and endpoint validity before saving.
+  * **Granular Feature Toggles**: Independent activation controls for 1-Click RCA, Executive Narratives, and Telemetry Copilot.
+* **1-Click Forensic Root-Cause Analysis (RCA) in Log Explorer**:
+  * Integrated into the **Document Inspector Modal** with a dedicated **AI Forensic RCA** tab.
+  * Deep RFC 7489, 7208, and 6376 forensic analysis evaluating header From vs envelope From, SPF mechanisms, and DKIM selector alignments.
+  * Outputs severity badges, executive summaries, root-cause breakdowns, identified SaaS vendors, step-by-step remediation, and 1-click copyable DNS records.
+* **Executive Report AI Security Briefings (Reports Dashboard, PDF & Excel)**:
+  * **Interactive Briefing Generator in Reports UI**: "Executive AI Security Briefing" card in the report generator with 1-click generation, synthesis latency indicator, editable preview textarea, and quick-copy action.
+  * **CISO-Grade Telemetry Synthesis**: Contextual prompt synthesizing monitored domain scope, date window, pass rates, failed spoofing counts, and RFC policy postures.
+  * **Automated PDF Embedding**: Renders a dedicated "Executive AI Security Briefing" callout on Page 1 of exported PDF reports immediately below KPI metric cards.
+  * **Automated Excel Embedding**: Renders a styled, merged "EXECUTIVE AI SECURITY ASSESSMENT" callout block on Sheet 1 ("Executive Summary") with text wrapping and formatted borders.
+* **Natural Language Telemetry Copilot ("Chat with Your DMARC Telemetry") [Phase 2]**:
+  * **Persistent Assistant Drawer**: Accessible globally from any screen via an animated, floating Cyber Dark copilot badge.
+  * **Grounded OpenSearch Retrieval**: Automatically queries live aggregate telemetry (volume, pass rate, failure count, active policy, top senders) to eliminate AI hallucinations.
+  * **Multi-Turn Persistent Sessions**: Conversations are saved to SQLite (`ai_copilot_sessions` and `ai_copilot_messages`), supporting renaming, deleting, and session restoration.
+  * **Interactive Follow-Up Suggestion Chips**: Assistant answers parse `<SUGGESTIONS>` tags into 1-click prompt chips for rapid iterative investigation.
+  * **Air-Gapped & Offline Heuristic Fallback**: Generates structured telemetry breakdowns and remediation advice even when external LLM keys are unconfigured.
+* **Shadow IT & SaaS Vendor Discovery Engine [Phase 2]**:
+  * **Built-in 20+ Major SaaS Catalog**: Classifies sending sources against Google Workspace, Microsoft 365, SendGrid, Amazon SES, Mailchimp, HubSpot, Salesforce, Postmark, Mailgun, Brevo, Zoho, Shopify, Freshdesk, Zendesk, Stripe, and Atlassian.
+  * **Intelligent 4-Tier Classification**: Categorizes traffic into **Authorized SaaS** (RFC compliant), **Shadow IT** (unauthorized SaaS sending on corporate domain without DNS delegation), **Unregistered Relay** (internal/partner MTA), and **Rogue Spoofer** (external phishing/spoofing clusters).
+  * **Executive Shadow IT KPIs**: Displays Total Senders, Authorized SaaS, Shadow IT Detected (with real-time at-risk message volume), and Rogue Spoofers.
+  * **1-Click "Authorize Vendor" DNS Modal**: Instantly generates ready-to-copy SPF TXT mechanisms (e.g. `include:_spf.google.com`), step-by-step DKIM selector instructions, and gateway IP address diagnostics.
+* **AI Policy Enforcement Advisor & "What-If" Impact Simulator [Phase 3]**:
+  * **Interactive Target Policy Switcher**: Simulate the exact business delivery consequences of advancing policies between `p=quarantine (pct=25)`, `p=quarantine (pct=100)`, and `p=reject (pct=100)`.
+  * **Readiness Confidence Score (0–100%)**: Dynamically evaluated based on compliant volume, identified legitimate senders requiring authentication, and traffic stability.
+  * **3 Core Delivery Impact Projections**:
+    * **Safe Deliveries**: Volume and percentage of legitimate emails guaranteed safe inbox delivery without disruption.
+    * **At-Risk Legitimate Mail**: Volume of legitimate business emails across marketing/support SaaS tools that would be blocked or quarantined.
+    * **Neutralized Threats**: Volume of brand impersonation and spoofing attempts that will be successfully dropped at recipient mail gateways.
+  * **Identified Legitimate Senders Requiring DNS Authorization**: Table highlighting business tools failing alignment, total volume, at-risk volume, compliance rate, and specific copyable DNS fixes before advancing enforcement.
+  * **Staged 5-Step Safe Transition Roadmap**: Interactive step checklist guiding organizations safely from `p=none` to `p=reject` without business bounce complaints.
+  * **Target DMARC DNS Record Generator**: Formats authoritative DNS records ready for copy-paste deployment.
+  * **Executive CISO Impact Assessment**: Contextual synthesis providing executive-level risk advice.
+* **Predictive Anomaly Detection Radar [Phase 3]**:
+  * **Vendor Alignment Drops**: Detects sudden compliance drops on authorized senders, signaling expired DKIM certificates or rotated selectors.
+  * **Geographic & ASN Spikes**: Detects suspicious outbound transmissions claiming corporate identity from unauthorized countries and ASNs.
+  * **Stealth Low-and-Slow Spoofing**: Spots distributed spoofing clusters operating below static rate-limiting alert thresholds.
+  * **Nominal Baseline Verification**: Confirms when sending infrastructure is within standard 30-day baseline deviations.
+* **SPF & BIMI Smart Optimizer [Phase 3]**:
+  * **RFC 7208 10-DNS-Lookup Budget**: Analyzes current SPF records and evaluates lookup consumption against the strict 10-lookup limit to prevent RFC PermErrors.
+  * **RFC 8953 BIMI Brand Indicator Record Generator**: Evaluates SVG logo readiness and outputs copyable `default._bimi.<domain>` records for inbox brand avatar display.

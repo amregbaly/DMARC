@@ -14,6 +14,9 @@ import ReportsDashboard from './components/ReportsDashboard';
 import AlertsDashboard from './components/AlertsDashboard';
 import EmailSettings from './components/EmailSettings';
 import ThemeManager from './components/ThemeManager';
+import AiSettings from './components/AiSettings';
+import ShadowItDiscovery from './components/ShadowItDiscovery';
+import TelemetryCopilot from './components/TelemetryCopilot';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import UserProfileModal from './components/UserProfileModal';
@@ -220,7 +223,7 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
         )}
 
         {/* Global KPI Cards (shown on log analytics tabs, hidden on health, reports & user management) */}
-        {activeTab !== 'health' && activeTab !== 'users' && activeTab !== 'reports' && activeTab !== 'themes' && (
+        {activeTab !== 'health' && activeTab !== 'users' && activeTab !== 'reports' && activeTab !== 'themes' && activeTab !== 'ai' && (
           <section aria-label="Executive Overview Metrics">
             <KPIGrid overview={overview} />
           </section>
@@ -256,6 +259,16 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
             onSelectDomain={setSelectedDomain}
             currentUser={currentUser}
           />
+        ) : activeTab === 'ai' ? (
+          <AiSettings
+            currentUser={currentUser}
+          />
+        ) : activeTab === 'shadow_it' ? (
+          <ShadowItDiscovery
+            selectedDomain={selectedDomain}
+            domains={domains}
+            currentUser={currentUser}
+          />
         ) : loading && !overview ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
             <RefreshCw className="w-8 h-8 animate-spin text-cyan-400 mb-3" />
@@ -286,7 +299,11 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
 
             {activeTab === 'policies' && (
               <>
-                <PolicyReadiness policies={policies} />
+                <PolicyReadiness
+                  policies={policies}
+                  selectedDomain={selectedDomain}
+                  domains={domains}
+                />
               </>
             )}
 
@@ -319,6 +336,13 @@ function DashboardApp({ currentUser, setCurrentUser, onLogout }) {
         </div>
       </footer>
     </div>
+
+    {/* AI Floating Telemetry Copilot Assistant */}
+    <TelemetryCopilot
+      selectedDomain={selectedDomain}
+      domains={domains}
+      currentUser={currentUser}
+    />
 
     {/* Modals */}
     <UserProfileModal

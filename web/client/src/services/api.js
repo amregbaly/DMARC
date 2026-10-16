@@ -507,4 +507,109 @@ export async function resetTheme(id) {
   });
 }
 
+// ==========================================
+// AI Intelligence & LLM Control Panel APIs
+// ==========================================
+
+export async function fetchAiSettings() {
+  return authFetch(`${BASE_URL}/admin/ai-settings`);
+}
+
+export async function saveAiSettings(settings) {
+  return authFetch(`${BASE_URL}/admin/ai-settings`, {
+    method: 'PUT',
+    body: JSON.stringify(settings)
+  });
+}
+
+export async function testAiSettings(payload) {
+  return authFetch(`${BASE_URL}/admin/ai-settings/test`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchAiStatus() {
+  return authFetch(`${BASE_URL}/ai/status`);
+}
+
+export async function diagnoseLogWithAi(log) {
+  return authFetch(`${BASE_URL}/ai/diagnose-log`, {
+    method: 'POST',
+    body: JSON.stringify({ log })
+  });
+}
+
+export async function generateAiExecutiveSummary(metrics) {
+  return authFetch(`${BASE_URL}/ai/executive-summary`, {
+    method: 'POST',
+    body: JSON.stringify({ metrics })
+  });
+}
+
+// ==========================================
+// Phase 2: Telemetry Copilot & Shadow IT
+// ==========================================
+
+export async function fetchCopilotSessions() {
+  return authFetch(`${BASE_URL}/ai/copilot/sessions`);
+}
+
+export async function createCopilotSession(payload = {}) {
+  return authFetch(`${BASE_URL}/ai/copilot/sessions`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchCopilotMessages(sessionId) {
+  return authFetch(`${BASE_URL}/ai/copilot/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export async function deleteCopilotSession(sessionId) {
+  return authFetch(`${BASE_URL}/ai/copilot/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function queryTelemetryCopilot(payload) {
+  return authFetch(`${BASE_URL}/ai/copilot/query`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchShadowItAnalysis(params = {}) {
+  const query = new URLSearchParams();
+  if (params.domain && params.domain !== 'all') query.append('domain', params.domain);
+  if (params.timeFrom) query.append('timeFrom', params.timeFrom);
+  if (params.timeTo) query.append('timeTo', params.timeTo);
+  return authFetch(`${BASE_URL}/ai/shadow-it?${query.toString()}`);
+}
+
+export async function simulatePolicyImpact(data = {}) {
+  return authFetch(`${BASE_URL}/ai/policy-simulator`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+}
+
+export async function fetchPredictiveAnomalies(params = {}) {
+  const query = new URLSearchParams();
+  if (params.domain && params.domain !== 'all') query.append('domain', params.domain);
+  if (params.timeFrom) query.append('timeFrom', params.timeFrom);
+  if (params.timeTo) query.append('timeTo', params.timeTo);
+  return authFetch(`${BASE_URL}/ai/predictive-anomalies?${query.toString()}`);
+}
+
+export async function analyzeSpfBimi(data = {}) {
+  return authFetch(`${BASE_URL}/ai/spf-bimi-optimizer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+}
+
+
 

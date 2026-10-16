@@ -294,31 +294,32 @@ export default function AggregateReportsView({
   // Source Categories summary counts
   const sourceStats = useMemo(() => {
     let dmarcCompatibleCount = 0;
-    let dmarcCompatibleVol = 0;
     let forwardedCount = 0;
-    let forwardedVol = 0;
     let failedCount = 0;
-    let failedVol = 0;
 
     sources.forEach((s) => {
       if (s.categoryTag === 'DMARC compatible sources') {
         dmarcCompatibleCount++;
-        dmarcCompatibleVol += s.totalVolume;
       } else if (s.categoryTag === 'Forwarded') {
         forwardedCount++;
-        forwardedVol += s.totalVolume;
       } else {
         failedCount++;
-        failedVol += s.totalVolume;
       }
     });
 
+    const totalPassed = summary?.passedVolume || 0;
+    const totalForwarded = summary?.forwardedVolume || 0;
+    const totalFailed = summary?.failedVolume || 0;
+    const compatibleVol = summary?.compatibleVolume !== undefined
+      ? summary.compatibleVolume
+      : Math.max(0, totalPassed - totalForwarded);
+
     return {
-      compatible: { count: dmarcCompatibleCount, volume: dmarcCompatibleVol },
-      forwarded: { count: forwardedCount, volume: forwardedVol },
-      failed: { count: failedCount, volume: failedVol }
+      compatible: { count: dmarcCompatibleCount, volume: compatibleVol },
+      forwarded: { count: forwardedCount, volume: totalForwarded },
+      failed: { count: failedCount, volume: totalFailed }
     };
-  }, [sources]);
+  }, [sources, summary]);
 
   // Filtered Orgs
   const filteredOrgs = useMemo(() => {

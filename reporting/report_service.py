@@ -75,7 +75,8 @@ def generate_report_bundle(
     output_dir: str = OUTPUT_DIR,
     allowed_domains: Optional[List[str]] = None,
     language: Optional[str] = None,
-    org_name: Optional[str] = None # backwards-compatible alias for client_org
+    org_name: Optional[str] = None, # backwards-compatible alias for client_org
+    ai_summary: Optional[str] = None
 ) -> dict:
     if formats is None:
         formats = ["pdf", "xlsx", "csv"]
@@ -108,6 +109,9 @@ def generate_report_bundle(
         disposition=effective_disp,
         allowed_domains=allowed_domains
     )
+
+    if ai_summary and str(ai_summary).strip():
+        data["ai_summary"] = str(ai_summary).strip()
 
     timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     safe_dom = (domain or "all").replace(".", "_")
@@ -241,6 +245,8 @@ if __name__ == "__main__":
     parser.add_argument("--language", default="", help="Report language (en, es)")
     parser.add_argument("--formats", default="pdf,xlsx,csv", help="Comma-separated formats (pdf,xlsx,csv)")
     parser.add_argument("--output-dir", default=OUTPUT_DIR, help="Output destination folder")
+    parser.add_argument("--ai-summary", default="", help="Inline executive AI summary text")
+    parser.add_argument("--ai-summary-file", default="", help="File containing executive AI summary text")
     parser.add_argument("--serve", action="store_true", help="Start the FastAPI HTTP server")
     parser.add_argument("--port", type=int, default=5050, help="Server port (default: 5050)")
     args = parser.parse_args()
@@ -253,6 +259,17 @@ if __name__ == "__main__":
         fmt_list = [f.strip() for f in args.formats.split(",") if f.strip()]
         effective_client_org = (args.client_org or args.org_name or "").strip()
         allowed_dom_list = [d.strip() for d in args.allowed_domains.split(",") if d.strip()] if args.allowed_domains else None
+
+        ai_summary_content = ""
+        if args.ai_summary_file and os.path.exists(args.ai_summary_file):
+            try:
+                with open(args.ai_summary_file, "r", encoding="utf-8") as f:
+                    ai_summary_content = f.read().strip()
+            except Exception as e:
+                print(f"Warning: could not read ai-summary-file: {e}", file=sys.stderr)
+        elif args.ai_summary:
+            ai_summary_content = args.ai_summary.strip()
+
         result = generate_report_bundle(
             domain=args.domain,
             date_from=args.date_from or None,
@@ -266,6 +283,7 @@ if __name__ == "__main__":
             formats=fmt_list,
             output_dir=args.output_dir,
             allowed_domains=allowed_dom_list,
-            language=args.language or None
+            language=args.language or None,
+            ai_summary=ai_summary_content or None
         )
         print(json.dumps(result, indent=2))

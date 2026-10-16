@@ -20,7 +20,9 @@ import {
   Settings,
   Palette,
   BellRing,
-  Mail
+  Mail,
+  Sparkles,
+  Radar
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -57,9 +59,11 @@ export default function Sidebar({
     { id: 'policies', label: t('nav.policies', 'Policies & Readiness'), icon: Sliders },
     { id: 'reports', label: t('nav.reports', 'Reports'), icon: FileText },
     { id: 'records', label: t('nav.records', 'Log Explorer'), icon: Search },
+    { id: 'shadow_it', label: t('nav.shadowIt', 'Shadow IT Discovery'), icon: Radar },
     ...(canManageUsers ? [{ id: 'users', label: t('nav.users', 'User Access'), icon: Users }] : []),
     ...(isAdmin ? [{ id: 'smtp', label: t('nav.smtp', 'Email / SMTP'), icon: Mail }] : []),
-    ...(isAdmin ? [{ id: 'themes', label: t('nav.themes', 'Theme Studio'), icon: Palette }] : [])
+    ...(isAdmin ? [{ id: 'themes', label: t('nav.themes', 'Theme Studio'), icon: Palette }] : []),
+    ...(isAdmin ? [{ id: 'ai', label: t('nav.aiSettings', 'AI Intelligence'), icon: Sparkles }] : [])
   ];
 
   return (

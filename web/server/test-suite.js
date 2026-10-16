@@ -21,6 +21,14 @@ import {
 import { evaluateRule } from './workers/alertEvaluator.js';
 import { formatReportEmailData } from './workers/reportScheduler.js';
 import { processQueueTick } from './workers/emailQueueWorker.js';
+import {
+  matchSaaSymmetricVendor,
+  analyzeShadowItAndVendors,
+  KNOWN_SAAS_VENDORS,
+  simulatePolicyEnforcement,
+  detectPredictiveAnomalies,
+  optimizeSpfAndBimi
+} from './services/aiService.js';
 
 console.log('====================================================');
 console.log('🛡️  DMARC Sentinel Email & Alerting Test Suite');
@@ -70,7 +78,7 @@ runTest('AES-256-GCM tamper detection fails gracefully', () => {
   const ciphertext = encrypt(secret);
   const parts = ciphertext.split(':');
   // Corrupt the ciphertext payload
-  parts[2] = parts[2].slice(0, -2) + 'aa';
+  parts[2] = parts[2].slice(0, -2) + (parts[2].slice(-2) === 'aa' ? 'bb' : 'aa');
   const tampered = parts.join(':');
   assert.throws(() => {
     decrypt(tampered);
@@ -670,6 +678,448 @@ await runAsyncTest('Export Tab to PDF (.pdf) with Executive Light styling and ve
   } finally {
     if (fs.existsSync(tmpPayload)) await fs.promises.unlink(tmpPayload);
   }
+});
+
+// ==========================================
+// 7. Phase 1: AI Integration & Executive Summaries
+// ==========================================
+console.log('\n--- 7. Phase 1: AI Integration & Executive Summaries ---');
+
+runTest('AI Settings save, retrieve, and mask API key', () => {
+  const original = db.getAiSettings({ includeDecrypted: true });
+
+  try {
+    // Save new settings with real dummy key
+    const saved = db.saveAiSettings({
+      enabled: true,
+      provider: 'google',
+      model: 'gemini-1.5-flash',
+      apiKey: 'AIzaSyTestKey_1234567890abcdef',
+      baseUrl: '',
+      temperature: 0.3,
+      maxTokens: 2048,
+      featureLogRca: true,
+      featureExecutiveSummary: true,
+      featureCopilot: true
+    });
+
+    assert.strictEqual(saved.enabled, true);
+    assert.strictEqual(saved.provider, 'google');
+    assert.strictEqual(saved.hasApiKey, true);
+    assert.strictEqual(saved.apiKey, '••••••••', 'Public getter must mask API key');
+
+    // Internal getter retrieves decrypted key
+    const internal = db.getAiSettings({ includeDecrypted: true });
+    assert.strictEqual(internal.apiKey, 'AIzaSyTestKey_1234567890abcdef', 'Internal getter retrieves decrypted key');
+
+    // Multi-provider key switching
+    db.saveAiSettings({
+      provider: 'openai',
+      model: 'gpt-4o',
+      apiKey: 'sk-proj-testOpenAiKey123456'
+    });
+
+    const openaiInternal = db.getAiSettings({ includeDecrypted: true });
+    assert.strictEqual(openaiInternal.provider, 'openai');
+    assert.strictEqual(openaiInternal.apiKey, 'sk-proj-testOpenAiKey123456');
+
+    // Switching back to google retains previously saved google key
+    db.saveAiSettings({ provider: 'google', model: 'gemini-1.5-flash' });
+    const restoredGoogle = db.getAiSettings({ includeDecrypted: true });
+    assert.strictEqual(restoredGoogle.provider, 'google');
+    assert.strictEqual(restoredGoogle.apiKey, 'AIzaSyTestKey_1234567890abcdef', 'Multi-provider keys preserved across switches');
+  } finally {
+    // Restore initial state if existed
+    if (original && original.is_configured) {
+      db.saveAiSettings({
+        enabled: original.enabled,
+        provider: original.provider,
+        model: original.model,
+        apiKey: original.apiKey,
+        baseUrl: original.baseUrl,
+        temperature: original.temperature,
+        maxTokens: original.maxTokens,
+        featureLogRca: original.featureLogRca,
+        featureExecutiveSummary: original.featureExecutiveSummary,
+        featureCopilot: original.featureCopilot
+      });
+    }
+  }
+});
+
+await runAsyncTest('Report Generation Engine bundles Executive AI Briefing into PDF and Excel', async () => {
+  const tmpSummaryFile = path.join('/tmp', `test_ai_summary_${Date.now()}.txt`);
+  const outDir = path.resolve(__dirname, '../../reporting/output');
+  const aiNarrative = 'Executive AI Security Briefing: Monitored domains demonstrate strong alignment with zero critical policy violations observed during the reporting period.';
+
+  await fs.promises.writeFile(tmpSummaryFile, aiNarrative, 'utf8');
+
+  try {
+    const scriptPath = path.resolve(__dirname, '../../reporting/report_service.py');
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile('python3', [
+        scriptPath,
+        '--domain', 'voxera.net',
+        '--formats', 'pdf,xlsx',
+        '--output-dir', outDir,
+        '--ai-summary-file', tmpSummaryFile
+      ], (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        resolve({ stdout });
+      });
+    });
+
+    const res = JSON.parse(stdout.trim());
+    assert.strictEqual(res.status, 'success');
+    assert(res.files.pdf && fs.existsSync(res.files.pdf.path), 'PDF report must be generated');
+    assert(res.files.xlsx && fs.existsSync(res.files.xlsx.path), 'Excel report must be generated');
+
+    // Clean up generated report files
+    if (fs.existsSync(res.files.pdf.path)) await fs.promises.unlink(res.files.pdf.path);
+    if (fs.existsSync(res.files.xlsx.path)) await fs.promises.unlink(res.files.xlsx.path);
+  } finally {
+    if (fs.existsSync(tmpSummaryFile)) await fs.promises.unlink(tmpSummaryFile);
+  }
+});
+
+// ==========================================
+// 8. Phase 2: AI Copilot & Shadow IT Discovery
+// ==========================================
+
+runTest('AI Copilot database sessions and multi-turn message history lifecycle', () => {
+  const session = db.createCopilotSession({
+    userId: 1,
+    domainScope: 'voxera.net',
+    title: 'Investigate SPF drops'
+  });
+
+  assert(session && session.id, 'Session should be created with UUID');
+  assert.strictEqual(session.domain_scope, 'voxera.net');
+  assert.strictEqual(session.title, 'Investigate SPF drops');
+
+  // Add user message
+  const userMsg = db.addCopilotMessage({
+    sessionId: session.id,
+    role: 'user',
+    content: 'Why did delivery fail on marketing mail?'
+  });
+  assert(userMsg && userMsg.id, 'User message should be persisted');
+
+  // Add assistant message with suggestions and metadata
+  const assistantMsg = db.addCopilotMessage({
+    sessionId: session.id,
+    role: 'assistant',
+    content: 'Marketing mail from SendGrid failed SPF alignment.',
+    meta: {
+      model: 'gemini-1.5-flash',
+      provider: 'google',
+      latencyMs: 340,
+      suggestions: ['Show SendGrid IPs', 'Provide SPF include for SendGrid']
+    }
+  });
+  assert(assistantMsg && assistantMsg.id, 'Assistant message should be persisted');
+  assert.deepStrictEqual(assistantMsg.meta.suggestions, ['Show SendGrid IPs', 'Provide SPF include for SendGrid']);
+
+  // Retrieve message history
+  const history = db.getCopilotMessages(session.id);
+  assert.strictEqual(history.length, 2, 'Session should contain exactly 2 messages');
+  assert.strictEqual(history[0].role, 'user');
+  assert.strictEqual(history[1].role, 'assistant');
+
+  // Update session title
+  db.updateCopilotSessionTitle(session.id, 1, 'SendGrid SPF Investigation');
+  const sessions = db.listCopilotSessions(1);
+  const found = sessions.find(s => s.id === session.id);
+  assert.strictEqual(found.title, 'SendGrid SPF Investigation');
+
+  // Cleanup: delete session
+  const deleted = db.deleteCopilotSession(session.id, 1);
+  assert.strictEqual(deleted.success, true, 'Session should be deleted');
+  const remainingHistory = db.getCopilotMessages(session.id);
+  assert.strictEqual(remainingHistory.length, 0, 'Messages should cascade delete');
+});
+
+runTest('SaaS Vendor Pattern Matcher correctly identifies major email providers', () => {
+  assert(KNOWN_SAAS_VENDORS.length >= 10, 'SaaS vendor catalog must contain at least 10 vendors');
+
+  // Google Workspace match
+  const googleMatch = matchSaaSymmetricVendor({
+    sourceName: 'Google Workspace Relay',
+    baseDomain: 'google.com',
+    asName: 'AS15169 GOOGLE',
+    nestedHosts: [{ hostname: 'mail-wr1-x42a.google.com', ip: '209.85.128.42' }]
+  });
+  assert(googleMatch && googleMatch.id === 'google', 'Should match Google Workspace');
+  assert.strictEqual(googleMatch.spfInclude, 'include:_spf.google.com');
+
+  // SendGrid match
+  const sendgridMatch = matchSaaSymmetricVendor({
+    sourceName: 'SendGrid Cloud MTA',
+    baseDomain: 'sendgrid.net',
+    asName: 'AS11377 TWILIO-SENDGRID',
+    nestedHosts: [{ hostname: 'o1.ptr2918.sendgrid.net', ip: '167.89.20.1' }]
+  });
+  assert(sendgridMatch && sendgridMatch.id === 'sendgrid', 'Should match Twilio SendGrid');
+  assert.strictEqual(sendgridMatch.spfInclude, 'include:sendgrid.net');
+
+  // Salesforce match
+  const salesforceMatch = matchSaaSymmetricVendor({
+    sourceName: 'Salesforce Marketing Cloud',
+    baseDomain: 'salesforce.com',
+    asName: 'AS14340 EXACTTARGET',
+    nestedHosts: [{ hostname: 'mta.exacttarget.com', ip: '136.147.180.1' }]
+  });
+  assert(salesforceMatch && salesforceMatch.id === 'salesforce', 'Should match Salesforce');
+
+  // Unknown relay
+  const unknownMatch = matchSaaSymmetricVendor({
+    sourceName: 'Random Unregistered VPS',
+    baseDomain: 'unknownvps.xyz',
+    asName: 'AS99999 HOSTING-CO',
+    nestedHosts: [{ hostname: 'host99.unknownvps.xyz', ip: '185.220.101.5' }]
+  });
+  assert.strictEqual(unknownMatch, null, 'Unregistered VPS should not match known SaaS catalog');
+});
+
+await runAsyncTest('Shadow IT Analysis classifies sources into Authorized SaaS, Shadow IT, and Rogue Spoofers', async () => {
+  const mockSources = [
+    {
+      sourceName: 'Google Workspace',
+      baseDomain: 'google.com',
+      asName: 'GOOGLE',
+      totalVolume: 5000,
+      compliantVolume: 4980, // 99.6% pass -> Authorized SaaS
+      spfAlignedVolume: 4980,
+      dkimAlignedVolume: 4980,
+      nestedHosts: [{ ip: '209.85.128.42', hostname: 'mail.google.com' }]
+    },
+    {
+      sourceName: 'HubSpot Inbound Marketing',
+      baseDomain: 'hubspot.com',
+      asName: 'HUBSPOT',
+      totalVolume: 1200,
+      compliantVolume: 100, // 8.3% pass -> Shadow IT (Needs DNS Auth)
+      spfAlignedVolume: 0,
+      dkimAlignedVolume: 100,
+      nestedHosts: [{ ip: '158.247.18.5', hostname: 'bid.hubspot.com' }]
+    },
+    {
+      sourceName: 'Botnet Spoofing Relay',
+      baseDomain: 'badactor.cc',
+      asName: 'BULK-HOSTING',
+      totalVolume: 450,
+      compliantVolume: 0, // 0% pass, not SaaS -> Rogue Spoofer
+      spfAlignedVolume: 0,
+      dkimAlignedVolume: 0,
+      nestedHosts: [{ ip: '91.240.118.2', hostname: 'scanner.badactor.cc' }]
+    }
+  ];
+
+  const analysis = await analyzeShadowItAndVendors({ sources: mockSources, domainScope: 'voxera.net' });
+
+  assert.strictEqual(analysis.summary.totalSources, 3);
+  assert.strictEqual(analysis.summary.authorizedCount, 1);
+  assert.strictEqual(analysis.summary.shadowItCount, 1);
+  assert.strictEqual(analysis.summary.rogueCount, 1);
+  assert.strictEqual(analysis.summary.shadowItVolume, 1200);
+  assert.strictEqual(analysis.summary.atRiskVolume, 1100 + 450);
+
+  const hubspot = analysis.vendors.find(v => v.id === 'hubspot');
+  assert(hubspot, 'HubSpot vendor should be in analysis results');
+  assert.strictEqual(hubspot.classification, 'shadow_it');
+  assert.strictEqual(hubspot.riskLevel, 'high');
+  assert(hubspot.spfInclude.includes('hubspot.com'), 'Should provide HubSpot SPF include');
+  assert(hubspot.remediationAction.includes('Add'), 'Should suggest DNS remediation');
+
+  const google = analysis.vendors.find(v => v.id === 'google');
+  assert(google, 'Google vendor should be in analysis results');
+  assert.strictEqual(google.classification, 'authorized_saas');
+
+  const rogue = analysis.vendors.find(v => v.classification === 'malicious_spoof');
+  assert(rogue, 'Rogue spoofer should be identified');
+});
+
+// ----------------------------------------------------
+// 8. PHASE 3: DEEP SECURITY TESTS
+// ----------------------------------------------------
+
+await runAsyncTest('AI Policy Enforcement Simulator accurately models delivery disruption and confidence score', async () => {
+  const mockTelemetry = {
+    totalMessages: 6650,
+    passedMessages: 5080,
+    failedMessages: 1570,
+    sources: [
+      {
+        sourceName: 'Google Workspace Relay',
+        baseDomain: 'google.com',
+        asName: 'GOOGLE',
+        totalVolume: 5000,
+        compliantVolume: 4980,
+        nestedHosts: [{ hostname: 'mail.google.com', ip: '209.85.128.42' }]
+      },
+      {
+        sourceName: 'HubSpot Marketing',
+        baseDomain: 'hubspot.com',
+        asName: 'HUBSPOT',
+        totalVolume: 1200,
+        compliantVolume: 100, // 8.3% pass rate (< 95%) -> At-Risk Legitimate Sender
+        nestedHosts: [{ hostname: 'bid.hubspot.com', ip: '158.247.18.5' }]
+      },
+      {
+        sourceName: 'Unauthorized Bulk Host',
+        baseDomain: 'spammer.biz',
+        asName: 'ROGUE-HOST',
+        totalVolume: 450,
+        compliantVolume: 0, // 0% compliance -> Neutralized Threat
+        nestedHosts: [{ hostname: 'mail.spammer.biz', ip: '185.220.101.5' }]
+      }
+    ]
+  };
+
+  const simResult = await simulatePolicyEnforcement({
+    domainScope: 'voxera.net',
+    targetPolicy: 'reject',
+    targetPct: 100,
+    telemetryData: mockTelemetry
+  });
+
+  assert.strictEqual(simResult.status, 'success');
+  assert.strictEqual(simResult.targetPolicy, 'reject');
+  assert.strictEqual(simResult.targetPct, 100);
+
+  const { simulation } = simResult;
+  assert.strictEqual(simulation.totalVolume, 6650);
+  assert.strictEqual(simulation.safeVolume, 5080);
+  assert.strictEqual(simulation.safePercentage, 76.4);
+  assert.strictEqual(simulation.atRiskLegitimateVolume, 1100);
+  assert.strictEqual(simulation.projectedBlockedDisruption, 1100);
+  assert.strictEqual(simulation.neutralizedThreatVolume, 450);
+  assert.strictEqual(simulation.projectedNeutralizedSpoofs, 450);
+
+  // At-risk vendor identification
+  assert.strictEqual(simulation.atRiskVendors.length, 1);
+  assert.strictEqual(simulation.atRiskVendors[0].id, 'hubspot');
+  assert.strictEqual(simulation.atRiskVendors[0].atRiskVolume, 1100);
+  assert(simulation.atRiskVendors[0].recommendedFix.includes('include:_spf.hubspot.com'));
+
+  // Readiness confidence score deduction
+  assert(simulation.readinessScore < 75, 'Confidence score should be penalized for high at-risk legitimate volume');
+  assert.strictEqual(simulation.readinessStatus, 'high_risk');
+
+  // Staged rollout checklist verification
+  assert.strictEqual(simulation.stagedChecklist.length, 5);
+  assert.strictEqual(simulation.stagedChecklist[0].status, 'completed');
+  assert.strictEqual(simulation.stagedChecklist[1].status, 'pending');
+
+  // Target DMARC DNS record formatting
+  assert(simulation.targetDmarcRecord.startsWith('v=DMARC1; p=reject; sp=reject; pct=100;'));
+  assert(simulation.targetDmarcRecord.includes('mailto:dmarc-rua@voxera.net'));
+});
+
+await runAsyncTest('Predictive Anomaly Detection identifies vendor drops, geo spikes, and nominal baseline', async () => {
+  // Scenario A: Anomalous telemetry with vendor drop, geo origin spike, and stealth campaign
+  const anomalousTelemetry = {
+    totalMessages: 5000,
+    sources: [
+      {
+        sourceName: 'Zendesk Support',
+        baseDomain: 'zendesk.com',
+        asName: 'ZENDESK',
+        totalVolume: 800,
+        compliantVolume: 200, // 25% pass (< 90%) -> vendor_alignment_drop anomaly
+        nestedHosts: [{ hostname: 'mail.zendesk.com', ip: '192.161.148.5' }]
+      },
+      {
+        sourceName: 'Foreign Relay Cluster',
+        baseDomain: 'foreignrelay.ru',
+        asName: 'RU-HOST',
+        totalVolume: 50,
+        compliantVolume: 0,
+        nestedHosts: [
+          { hostname: 'node-ru.foreignrelay.ru', ip: '91.240.118.2', country: 'RU', volume: 50 }
+        ]
+      },
+      {
+        sourceName: 'Distributed Botnet',
+        baseDomain: 'botcluster.org',
+        asName: 'BULK',
+        totalVolume: 120,
+        compliantVolume: 5,
+        nestedHosts: [{ hostname: 'sp1.botcluster.org', ip: '45.154.255.8', country: 'US', volume: 120 }]
+      }
+    ]
+  };
+
+  const anomReport = await detectPredictiveAnomalies({
+    domainScope: 'voxera.net',
+    telemetryData: anomalousTelemetry
+  });
+
+  assert.strictEqual(anomReport.status, 'success');
+  assert(anomReport.totalAnomalies >= 3, 'Should detect at least 3 distinct non-low anomalies');
+
+  const vendorDrop = anomReport.anomalies.find(a => a.type === 'vendor_alignment_drop');
+  assert(vendorDrop, 'Should detect vendor alignment drop anomaly');
+  assert.strictEqual(vendorDrop.sender, 'Zendesk Support');
+  assert.strictEqual(vendorDrop.severity, 'high');
+
+  const geoSpike = anomReport.anomalies.find(a => a.type === 'geographic_origin_anomaly');
+  assert(geoSpike, 'Should detect geographic origin spike anomaly');
+  assert.strictEqual(geoSpike.severity, 'critical');
+  assert(geoSpike.description.includes('RU'));
+
+  const stealthPhish = anomReport.anomalies.find(a => a.type === 'stealth_spoof_campaign');
+  assert(stealthPhish, 'Should detect stealth spoof campaign');
+
+  // Scenario B: Clean telemetry produces nominal baseline
+  const cleanTelemetry = {
+    totalMessages: 1000,
+    sources: [
+      {
+        sourceName: 'Google Workspace',
+        baseDomain: 'google.com',
+        asName: 'GOOGLE',
+        totalVolume: 1000,
+        compliantVolume: 998,
+        nestedHosts: [{ hostname: 'mail.google.com', ip: '209.85.128.42', country: 'US', volume: 1000 }]
+      }
+    ]
+  };
+
+  const cleanReport = await detectPredictiveAnomalies({
+    domainScope: 'voxera.net',
+    telemetryData: cleanTelemetry
+  });
+
+  assert.strictEqual(cleanReport.totalAnomalies, 0);
+  assert.strictEqual(cleanReport.anomalies[0].type, 'nominal_baseline');
+  assert.strictEqual(cleanReport.anomalies[0].severity, 'low');
+});
+
+runTest('SPF & BIMI Smart Optimizer evaluates RFC 7208 10-lookup limits and BIMI SVG readiness', () => {
+  // Test Case 1: Healthy record with 3 lookups
+  const safeSpf = 'v=spf1 include:_spf.google.com include:sendgrid.net a:mail.voxera.net ~all';
+  const safeResult = optimizeSpfAndBimi({ domain: 'voxera.net', currentSpf: safeSpf, logoUrl: 'https://voxera.net/logo.svg' });
+
+  assert.strictEqual(safeResult.spfOptimizer.lookupCount, 3);
+  assert.strictEqual(safeResult.spfOptimizer.lookupsRemaining, 7);
+  assert.strictEqual(safeResult.spfOptimizer.status, 'safe');
+  assert.strictEqual(safeResult.bimiOptimizer.selector, 'default._bimi.voxera.net');
+  assert.strictEqual(safeResult.bimiOptimizer.svgTinyCompliant, true);
+  assert(safeResult.bimiOptimizer.bimiRecord.includes('v=BIMI1;'));
+
+  // Test Case 2: Near limit record with 8 lookups
+  const nearLimitSpf = 'v=spf1 include:one.com include:two.com include:three.com include:four.com include:five.com include:six.com a mx ~all';
+  const warnResult = optimizeSpfAndBimi({ domain: 'voxera.net', currentSpf: nearLimitSpf });
+  assert.strictEqual(warnResult.spfOptimizer.lookupCount, 8);
+  assert.strictEqual(warnResult.spfOptimizer.status, 'warning');
+
+  // Test Case 3: Exceeded limit (PermError) with 11 lookups
+  const exceededSpf = 'v=spf1 include:1.com include:2.com include:3.com include:4.com include:5.com include:6.com include:7.com include:8.com include:9.com include:10.com include:11.com ~all';
+  const dangerResult = optimizeSpfAndBimi({ domain: 'voxera.net', currentSpf: exceededSpf });
+  assert.strictEqual(dangerResult.spfOptimizer.lookupCount, 11);
+  assert.strictEqual(dangerResult.spfOptimizer.status, 'danger');
+  assert(dangerResult.spfOptimizer.recommendation.includes('RFC 7208 PermError Alert'));
 });
 
 console.log('\n====================================================');

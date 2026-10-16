@@ -42,14 +42,18 @@ class DmarcExcelGenerator:
             cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
             cell.border = border
 
-    def _auto_fit_columns(self, ws):
+    def _auto_fit_columns(self, ws, max_col_width: int = 50):
         for col in ws.columns:
             max_len = 0
             col_letter = get_column_letter(col[0].column)
             for cell in col:
                 val_str = str(cell.value or "")
-                max_len = max(max_len, len(val_str))
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+                # Ignore merged cells with long paragraphs from blowing out single column widths
+                if "\n" in val_str or len(val_str) > 75:
+                    max_len = max(max_len, 25)
+                else:
+                    max_len = max(max_len, len(val_str))
+            ws.column_dimensions[col_letter].width = min(max(max_len + 4, 12), max_col_width)
 
     def render_excel(self, data: Dict[str, Any], output_path: str, domain: str = "all") -> str:
         wb = openpyxl.Workbook()
@@ -103,6 +107,27 @@ class DmarcExcelGenerator:
             if "Pass Rate" in label:
                 c2.font = Font(bold=True, color="FF10B981" if val >= 0.9 else "FFEF4444")
             r += 1
+
+        # AI Executive Security Briefing Block (Side-by-side with KPIs)
+        ai_summary = data.get("ai_summary")
+        if ai_summary:
+            ws_sum.merge_cells("D7:G7")
+            hdr_cell = ws_sum.cell(row=7, column=4, value="🤖 EXECUTIVE AI SECURITY ASSESSMENT")
+            hdr_cell.fill = PatternFill(start_color=self.header_hex, end_color=self.header_hex, fill_type="solid")
+            hdr_cell.font = Font(name="Calibri", size=10, bold=True, color=self.header_text_hex)
+            hdr_cell.alignment = Alignment(horizontal="left", vertical="center")
+            
+            ws_sum.merge_cells("D8:G14")
+            body_cell = ws_sum.cell(row=8, column=4, value=str(ai_summary).strip())
+            body_cell.fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+            body_cell.font = Font(name="Calibri", size=9.5, color="1E293B")
+            body_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+            
+            thin_side = Side(style="thin", color="CBD5E1")
+            box_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+            for box_row in ws_sum.iter_rows(min_row=7, max_row=14, min_col=4, max_col=7):
+                for cell in box_row:
+                    cell.border = box_border
 
         # Domain Readiness Table
         r += 2
